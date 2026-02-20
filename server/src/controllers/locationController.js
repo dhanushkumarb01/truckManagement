@@ -42,11 +42,16 @@ function validateLocationPayload(body) {
  * Receives GPS location data from Android app.
  */
 export const receiveLocation = asyncHandler(async (req, res) => {
+    console.log("🔥 HIT PRODUCTION BACKEND");
+    console.log("Incoming Body:", req.body);
+
     const { truckId, latitude, longitude, accuracy, timestamp } = req.body;
 
     // Validate payload
     const validationErrors = validateLocationPayload(req.body);
     if (validationErrors.length > 0) {
+        console.log("❌ Validation failed:", validationErrors);
+
         return res.status(400).json({
             success: false,
             data: null,
@@ -54,25 +59,34 @@ export const receiveLocation = asyncHandler(async (req, res) => {
         });
     }
 
-    // Create GPS event in MongoDB
-    const gpsEvent = await GpsEvent.create({
-        truckId,
-        latitude,
-        longitude,
-        accuracy,
-        timestamp: new Date(timestamp),
-        eventType: 'GPS_UPDATE',
-    });
+    try {
+        const gpsEvent = await GpsEvent.create({
+            truckId,
+            latitude,
+            longitude,
+            accuracy,
+            timestamp: new Date(timestamp),
+            eventType: 'GPS_UPDATE',
+        });
 
-    // Console logging as requested
-    console.log(`GPS update received from ${truckId} at ${latitude}, ${longitude}`);
+        console.log("✅ Saved to MongoDB with ID:", gpsEvent._id);
 
-    res.status(201).json({
-        success: true,
-        data: gpsEvent,
-        message: 'Location received successfully',
-    });
+        res.status(201).json({
+            success: true,
+            data: gpsEvent,
+            message: 'Location received successfully',
+        });
+    } catch (error) {
+        console.error("❌ MongoDB Insert Error:", error);
+
+        res.status(500).json({
+            success: false,
+            data: null,
+            message: "Database insert failed",
+        });
+    }
 });
+
 
 /**
  * GET /api/events
