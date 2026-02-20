@@ -1,12 +1,5 @@
 import { asyncHandler } from '../middleware/errorHandler.js';
-
-/**
- * In-memory storage for GPS location events.
- * In production, this would be persisted to a database.
- */
-const gpsEventLogs = [];
-
-let eventIdCounter = 1;
+import GpsEvent from '../models/GpsEvent.js';
 
 /**
  * Validates the location payload.
@@ -61,19 +54,15 @@ export const receiveLocation = asyncHandler(async (req, res) => {
         });
     }
 
-    // Create GPS event log entry
-    const gpsEvent = {
-        id: eventIdCounter++,
+    // Create GPS event in MongoDB
+    const gpsEvent = await GpsEvent.create({
         truckId,
         latitude,
         longitude,
         accuracy,
-        timestamp,
+        timestamp: new Date(timestamp),
         eventType: 'GPS_UPDATE',
-    };
-
-    // Store in memory
-    gpsEventLogs.push(gpsEvent);
+    });
 
     // Console logging as requested
     console.log(`GPS update received from ${truckId} at ${latitude}, ${longitude}`);
@@ -90,19 +79,14 @@ export const receiveLocation = asyncHandler(async (req, res) => {
  * Returns all GPS event logs, sorted by latest first.
  */
 export const getGpsEvents = asyncHandler(async (req, res) => {
-    // Sort by timestamp descending (latest first)
-    const sortedEvents = [...gpsEventLogs].sort((a, b) => {
-        return new Date(b.timestamp) - new Date(a.timestamp);
-    });
+    // Fetch from MongoDB, sorted by timestamp descending
+    const events = await GpsEvent.find()
+        .sort({ timestamp: -1 })
+        .lean();
 
     res.json({
         success: true,
-        data: sortedEvents,
-        message: `${sortedEvents.length} GPS event(s) found`,
+        data: events,
+        message: `${events.length} GPS event(s) found`,
     });
 });
-
-/**
- * Export for testing or external access if needed.
- */
-export { gpsEventLogs };
