@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = 'https://truckmanagement-r1vo.onrender.com/api'
 
 /**
  * Generic fetch wrapper with error handling.
@@ -73,4 +73,12 @@ export function getEvents(truckId) {
 
 export function getAllSessions() {
     return request('/sessions');
+}
+
+/**
+ * GET /api/events
+ * Returns all GPS location events.
+ */
+export function getGpsEvents() {
+    return request('/events');
 }

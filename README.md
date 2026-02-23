@@ -2,22 +2,34 @@
 
 A production-quality POC for monitoring hybrid truck operations using RFID and camera-based detection, built with Node.js, Express, React 18, and MongoDB Atlas.
 
+## Features
+
+- **Live Map**: Real-time Leaflet + OpenStreetMap view showing all truck locations with unique markers
+- **Truck Stage Simulation**: Manual simulation of truck workflow stages
+- **Fleet Overview**: Dashboard showing all truck sessions and their status
+- **GPS Tracking**: Backend support for receiving GPS updates from Android devices
+
 ## Architecture
 
 ```
 server/               → Express + Mongoose backend
 ├── src/
 │   ├── app.js        → Entry point (dotenv, CORS, routes)
-│   ├── models/       → TruckSession, EventLog schemas
+│   ├── models/       → TruckSession, EventLog, GpsEvent schemas
 │   ├── services/     → Rule engine (state transitions, dock enforcement)
-│   ├── controllers/  → Session & event handlers
+│   ├── controllers/  → Session, event, & location handlers
 │   ├── routes/       → API route definitions
-│   └── middleware/    → Error handler
+│   └── middleware/   → Error handler
 client/               → Vite + React 18 frontend
 ├── src/
-│   ├── App.jsx       → Main layout (3-column grid)
+│   ├── App.jsx       → Main layout (map, simulation, fleet views)
 │   ├── api.js        → Fetch API service layer
+│   ├── config.js     → App configuration (map settings)
 │   ├── components/   → UI components
+│   │   ├── MapPage.jsx         → Live map with marker management
+│   │   ├── TruckListPanel.jsx  → Sidebar truck list
+│   │   ├── SimulationSidebar.jsx → Stage simulation controls
+│   │   └── ...
 │   └── index.css     → Design system
 ```
 
@@ -47,6 +59,8 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
+> **Note**: The map uses Leaflet with OpenStreetMap tiles - no API key required!
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -59,6 +73,9 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 | POST | `/api/session/exit` | Exit facility |
 | GET | `/api/session/:truckId` | Get active session |
 | GET | `/api/events/:truckId` | Get truck event log |
+| GET | `/api/events` | Get all GPS location events |
+| POST | `/api/location` | Receive GPS location from Android |
+| GET | `/api/sessions` | Get all truck sessions |
 
 ## Business Rules
 

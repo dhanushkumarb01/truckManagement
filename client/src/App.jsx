@@ -10,9 +10,10 @@ import ViolationModal from './components/ViolationModal';
 import Toast from './components/Toast';
 import TruckSelector from './components/TruckSelector';
 import FleetOverview from './components/FleetOverview';
+import MapPage from './components/MapPage';
 
 function App() {
-    const [view, setView] = useState('simulation'); // 'simulation' | 'fleet'
+    const [view, setView] = useState('map'); // 'map' | 'simulation' | 'fleet'
     const [session, setSession] = useState(null);
     const [events, setEvents] = useState([]);
     const [allSessions, setAllSessions] = useState([]);
@@ -183,6 +184,12 @@ function App() {
                 <span>Hybrid RFID + Camera Detection</span>
                 <nav className="header-nav">
                     <button
+                        className={`nav-btn ${view === 'map' ? 'nav-btn-active' : ''}`}
+                        onClick={() => setView('map')}
+                    >
+                        Live Map
+                    </button>
+                    <button
                         className={`nav-btn ${view === 'simulation' ? 'nav-btn-active' : ''}`}
                         onClick={() => setView('simulation')}
                     >
@@ -197,7 +204,20 @@ function App() {
                 </nav>
             </header>
 
-            {view === 'simulation' ? (
+            {view === 'map' ? (
+                <MapPage
+                    session={session}
+                    allSessions={allSessions}
+                    loading={loading}
+                    onSelectTruck={handleSelectTruck}
+                    onStart={handleStart}
+                    onTare={handleTare}
+                    onGross={handleGross}
+                    onDock={handleDock}
+                    onInvoice={handleInvoice}
+                    onExit={handleExit}
+                />
+            ) : view === 'simulation' ? (
                 <div className="app-grid">
                     {/* Left Column — Controls */}
                     <div className="panel-stack">
