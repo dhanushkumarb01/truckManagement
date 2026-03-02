@@ -1,0 +1,878 @@
+# 🔴 PRODUCTION ENGINEERING AUDIT — Smart Yard / Hybrid Truck Monitoring System
+
+**Audit Date:** 2026-03-02  
+**Auditor:** System Architecture Audit  
+**System:** Smart Yard / Hybrid Truck Monitoring  
+**Deployment Status:** Partially deployed (Render.com + MongoDB Atlas)  
+**Classification:** Industrial Logistics — Steel Yard Operations
+
+---
+
+## Files Audited
+
+| Layer | Files |
+|-------|-------|
+| **Server Entry** | [app.js](file:///c:/Users/Dhanush/internship-project2/server/src/app.js) |
+| **Models** | [TruckSession.js](file:///c:/Users/Dhanush/internship-project2/server/src/models/TruckSession.js), [GpsEvent.js](file:///c:/Users/Dhanush/internship-project2/server/src/models/GpsEvent.js), [EventLog.js](file:///c:/Users/Dhanush/internship-project2/server/src/models/EventLog.js) |
+| **Controllers** | [sessionController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/sessionController.js), [locationController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/locationController.js), [eventController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/eventController.js) |
+| **Routes** | [sessionRoutes.js](file:///c:/Users/Dhanush/internship-project2/server/src/routes/sessionRoutes.js), [locationRoutes.js](file:///c:/Users/Dhanush/internship-project2/server/src/routes/locationRoutes.js), [eventRoutes.js](file:///c:/Users/Dhanush/internship-project2/server/src/routes/eventRoutes.js) |
+| **Services** | [ruleEngine.js](file:///c:/Users/Dhanush/internship-project2/server/src/services/ruleEngine.js) |
+| **Middleware** | [errorHandler.js](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/errorHandler.js) |
+| **Client Core** | [App.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/App.jsx), [api.js](file:///c:/Users/Dhanush/internship-project2/client/src/api.js), [config.js](file:///c:/Users/Dhanush/internship-project2/client/src/config.js) |
+| **Client Utils** | [zoneUtils.js](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js) |
+| **Client Components** | [MapPage.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx), [FleetOverview.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/FleetOverview.jsx), [TruckListPanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/TruckListPanel.jsx), [YardConfigPanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/YardConfigPanel.jsx), [TestingPanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/TestingPanel.jsx), [StatusDisplay.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/StatusDisplay.jsx), [SimulationSidebar.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/SimulationSidebar.jsx), [DockPanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/DockPanel.jsx), [InvoicePanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/InvoicePanel.jsx), [WeighbridgePanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/WeighbridgePanel.jsx), [StartSession.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/StartSession.jsx), [TruckSelector.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/TruckSelector.jsx), [Toast.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/Toast.jsx), [ViolationModal.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/ViolationModal.jsx) |
+| **Config/Infra** | [server/package.json](file:///c:/Users/Dhanush/internship-project2/server/package.json), [client/package.json](file:///c:/Users/Dhanush/internship-project2/client/package.json), [server/.env.example](file:///c:/Users/Dhanush/internship-project2/server/.env.example), [seed.js](file:///c:/Users/Dhanush/internship-project2/server/seed.js) |
+
+---
+
+# SECTION 1 — SYSTEM FLOW ANALYSIS
+
+## 1.1 QR Generation Flow
+
+**Current State:** NOT IMPLEMENTED in the codebase.
+
+The user request mentions "Dynamic QR session start" but there is zero QR code generation logic anywhere in the codebase. Sessions are started via a manual text input ([StartSession.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/StartSession.jsx) line 19: `<input type="text" placeholder="e.g. TRK-001">`).
+
+**Break Points:**
+- No QR generation endpoint exists
+- No QR scanning integration on any mobile client
+- Session start is entirely manual and freeform
+
+**Risk:** For a production steel yard, this means anyone who knows the API URL can start sessions with arbitrary truck IDs. There is no QR-to-session binding.
+
+---
+
+## 1.2 Session Start Flow
+
+```
+Client input (truckId string)
+  → POST /api/session/start { truckId }
+    → Check: TruckSession.findOne({ truckId, state: { $ne: 'EXITED' } })
+    → If no existing active session → TruckSession.create()
+    → Create EventLog entry
+    → Return session data
+```
+
+**Break Points & Race Conditions:**
+
+> [!CAUTION]
+> **CRITICAL RACE CONDITION:** The `findOne` + [create](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#28-50) in [startSession](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#24-30) ([sessionController.js:43-59](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/sessionController.js#L43-L59)) is not atomic. Two concurrent requests with the same `truckId` can both pass the `findOne` check (finding no active session) and then both call [create()](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#28-50), resulting in **two active sessions for the same truck**.
+
+**Mitigation needed:** MongoDB unique compound index on `{ truckId, state }` with a partial filter expression, or use `findOneAndUpdate` with `upsert` and a conditional.
+
+**Silent Failure Points:**
+- The `EventLog.create()` call after session creation has no error handling — if it fails, the session is created but the event is silently lost.
+- No request ID or correlation ID links the session start to any specific physical truck or QR scan.
+
+---
+
+## 1.3 GPS Tracking Flow
+
+```
+Android App sends HTTP POST every 5 seconds
+  → POST /api/location { truckId, latitude, longitude, accuracy, timestamp }
+    → Validation (type checks only)
+    → GpsEvent.create() — stores every single GPS point
+    → Returns 201
+```
+
+**Break Points:**
+
+- **No session validation:** GPS data is accepted for ANY `truckId`, even ones without active sessions. A client can send GPS data for `truckId: "FAKE-999"` and it will be stored.
+- **No deduplication:** If the Android app retries a failed request, the same GPS event gets stored twice. There is no idempotency key.
+- **No rate limiting:** A malicious or malfunctioning client can flood `POST /api/location` with thousands of requests per second.
+- **Unbounded storage:** Every GPS event is stored permanently. No TTL, no archival, no cleanup. At 5-second intervals per truck, this generates **17,280 records per truck per day**.
+
+**Silent Failure Points:**
+- The try/catch in `receiveLocation` ([locationController.js:62-87](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/locationController.js#L62-L87)) returns 500 but does NOT log the actual error payload to any structured logging system. The `console.error` will be lost in production unless Render.com logs are being actively monitored.
+
+---
+
+## 1.4 Location API / GPS Event Retrieval Flow
+
+```
+Dashboard polls GET /api/events every 5 seconds
+  → GpsEvent.find().sort({ timestamp: -1 }).lean()
+  → Returns ALL GPS events
+  → Client-side: processGpsEvents() filters to latest per truck
+```
+
+> [!CAUTION]
+> **CRITICAL SCALABILITY BUG:** [getGpsEvents()](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) in [locationController.js:95-106](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/locationController.js#L95-L106) fetches **every single GPS event ever recorded** from MongoDB, sorts them, and returns them all to the client. There is **no `.limit()`**, **no pagination**, **no filtering by time window**, and **no server-side aggregation to get latest-per-truck**.
+
+With 100 trucks running for 1 day: `100 × 17,280 = 1,728,000 documents` transferred over HTTP every 5 seconds to every connected dashboard. This will crash both the server and the browser.
+
+---
+
+## 1.5 MongoDB Storage Flow
+
+**Write path:** Each GPS event → `GpsEvent.create()` (single document insert). Each session state change → `session.save()` (full document update). Each event log → `EventLog.create()`.
+
+**Issues:**
+- No write concern specified. Mongoose defaults to `w: 1` which is fine for Atlas, but no journaling specification.
+- No batch inserts. Each GPS event is an individual insert — no batching or buffering.
+- The `session.save()` pattern fetches the doc, modifies in memory, then saves. This creates a read-modify-write race condition window.
+
+---
+
+## 1.6 Dashboard Polling Flow
+
+```
+MapPage useEffect (every 5s)
+  → api.getGpsEvents()  — fetches ALL GPS events
+  → processGpsEvents()  — client-side dedup to latest per truck
+  → updateMarkers()     — adds/removes/updates Leaflet markers
+  → detectZone()        — client-side geofencing
+  → zone alert tracking — client-side only
+```
+
+**AND separately:**
+```
+FleetOverview useEffect (every 5s)
+  → api.getAllSessions() — fetches ALL sessions
+```
+
+**AND in App.jsx:**
+```
+App useEffect on mount
+  → api.getAllSessions() — fetches ALL sessions again
+```
+
+**Problem:** Multiple components independently poll the same endpoints. If a user has both Fleet Overview and Map open (via switching), there can be **multiple overlapping polling intervals** for [getAllSessions](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#74-77).
+
+---
+
+## 1.7 Geofence Detection Flow
+
+**Entirely client-side.** The zone detection logic lives in [zoneUtils.js](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js) and is called in [MapPage.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx) during polling. Zone transition alerts are stored in React state and lost on page refresh.
+
+> [!WARNING]
+> **There is zero server-side geofencing.** If the dashboard is closed, no zone detection occurs. Zone violations are not persisted. This means a truck could enter a restricted zone overnight with no alert generated.
+
+---
+
+## 1.8 TTL Deletion Flow
+
+**NOT IMPLEMENTED.** Despite being listed in the system requirements, there are zero TTL indexes on any collection. No documents are ever automatically deleted. The [GpsEvent](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) collection will grow indefinitely.
+
+---
+
+## 1.9 Truck ID Persistence Flow
+
+Truck IDs are plain strings provided by the user through text input. There is:
+- No truck registry/master list
+- No validation against known trucks
+- No UUID, no format constraints
+- A user could enter `truckId: "'; DROP TABLE--"` (not SQL, but illustrates the lack of sanitization)
+- Truck IDs are case-sensitive — `TRUCK-101` and `truck-101` are different trucks
+
+---
+
+# SECTION 2 — ANDROID AUDIT
+
+> [!IMPORTANT]
+> **The Android/Kotlin app source code is NOT present in this repository.** The codebase only contains the Node.js backend and React frontend. Therefore, this section is based on the API contract observed from the server side and the stated architecture.
+
+## 2.1 Observable API Contract Issues
+
+Based on the `POST /api/location` endpoint contract:
+
+| Aspect | Status | Risk |
+|--------|--------|------|
+| Location lifecycle leaks | **Unknown** — no Android code to audit | Cannot assess |
+| Battery optimization | **Unknown** | 5-sec GPS polling will drain battery rapidly |
+| Background execution (Android 12+) | **Unknown** | `POST` every 5 sec will be killed by Doze mode |
+| App kill scenarios | **No offline buffer** — if app is killed, GPS data is lost | HIGH |
+| Permission edge cases | **Unknown** | No fallback for `ACCESS_FINE_LOCATION` denial |
+| GPS accuracy degradation | Server stores `accuracy` field but **never uses it** | Server accepts accuracy: 9999 without filtering |
+| UUID generation | **Not used** — plain string truckId | No device-unique identifier |
+| Network retry strategy | **Not visible** from server side | No idempotency key support on server |
+| Offline buffering | **No server support** — no batch endpoint, no dedup | If app buffered, no way to batch-submit |
+| BLE integration | **Not implemented** anywhere | N/A |
+
+## 2.2 Recommendations for Android Production Stability
+
+1. **Use `WorkManager`** for GPS uploads — survives app kills and respects Doze mode
+2. **Implement local SQLite buffer** — store GPS events locally, batch-upload when connectivity returns
+3. **Add idempotency keys** — UUID per GPS event, server deduplicates
+4. **Use `ForegroundService`** with persistent notification for active tracking sessions
+5. **Implement exponential backoff** with jitter for failed uploads
+6. **Validate GPS accuracy** — discard readings with accuracy > 50m in a yard context
+7. **Add device fingerprint** to link truckId to a specific device
+8. **Use certificate pinning** for the API connection
+
+---
+
+# SECTION 3 — BACKEND AUDIT (Node.js + Express + MongoDB)
+
+## 3.1 Route Structure
+
+| Route | Method | Handler | Notes |
+|-------|--------|---------|-------|
+| `/api/session/start` | POST | [startSession](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#24-30) | No auth |
+| `/api/session/tare` | POST | [recordTare](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#31-37) | No auth |
+| `/api/session/dock` | POST | [enterDock](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#38-44) | No auth |
+| `/api/session/gross` | POST | [recordGross](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#45-51) | No auth |
+| `/api/session/invoice` | POST | [generateInvoice](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#52-58) | No auth |
+| `/api/session/exit` | POST | [exitSession](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#59-65) | No auth |
+| `/api/session/:truckId` | GET | [getSession](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#66-69) | No auth |
+| `/api/sessions` | GET | [getAllSessions](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#74-77) | No auth, no pagination |
+| `/api/location` | POST | `receiveLocation` | No auth, no rate limit |
+| `/api/events` | GET | [getGpsEvents](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) | No auth, **returns ALL data** |
+| `/api/events/:truckId` | GET | [getEvents](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#70-73) | No auth, no pagination |
+| `/api/health` | GET | Health check | OK |
+
+> [!CAUTION]
+> **Every single API endpoint is completely unauthenticated.** Anyone who discovers the API URL (which is hardcoded in the client: `https://truckmanagement-r1vo.onrender.com/api`) can read all data, create sessions, manipulate weights, generate invoices, and exit trucks.
+
+## 3.2 Validation Middleware
+
+**`express-validator` is installed in [package.json](file:///c:/Users/Dhanush/internship-project2/package.json) but NEVER USED.** Validation is hand-rolled inline in controllers.
+
+- [startSession](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#24-30): Only checks `truckId` exists and is non-empty
+- [recordTare](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#31-37): Validates state transition + weight > 0, but does NOT validate `truckId` format
+- `receiveLocation`: Custom [validateLocationPayload()](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/locationController.js#4-39) — better than other endpoints, but still no schema validation
+- No validation middleware applied at route level
+
+**Missing validations:**
+- `truckId` max length (could be 1MB string)
+- `truckId` character restrictions (could contain special chars, newlines, etc.)
+- Weight value upper bounds (accepts `grossWeight: 999999999999999`)
+- Latitude/longitude range validation (`±90`/`±180`) — checked in client's yard config but NOT in server's GPS endpoint
+- Timestamp future-checking (accepts timestamps from year 2099)
+- Request body size limit (Express default is 100KB, but not explicitly set)
+
+## 3.3 Input Sanitization
+
+**NONE.** No sanitization of any kind. The `truckId` is stored exactly as received. If used in HTML (popup content in [MapPage.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx)), this creates XSS risk:
+
+```javascript
+// MapPage.jsx line 330 — uses truckId in innerHTML
+`<strong style="font-size: 14px;">🚛 ${truckId}</strong>`
+```
+
+If `truckId` contains `<script>alert('xss')</script>`, this will execute in every connected dashboard.
+
+## 3.4 Rate Limiting
+
+**NOT IMPLEMENTED.** No `express-rate-limit`, no `express-slow-down`, no custom rate limiting. The `/api/location` endpoint accepts unlimited requests per second.
+
+## 3.5 Authentication / Authorization
+
+**NOT IMPLEMENTED.** No JWT, no API keys, no session cookies, no OAuth, no Basic Auth. Zero authentication on all endpoints.
+
+CORS is the only access control:
+```javascript
+// Any .onrender.com subdomain is allowed
+if (origin.endsWith('.onrender.com')) return callback(null, true);
+// Requests with no origin (mobile, curl) are always allowed
+if (!origin) return callback(null, true);
+```
+
+This means:
+- Any Render.com app can access the API
+- Any non-browser client (curl, Postman, scripts) has full access
+- The Android app bypasses CORS entirely
+
+## 3.6 MongoDB Indexing Strategy
+
+**Declared indexes (from Mongoose schemas):**
+| Collection | Field | Index Type |
+|------------|-------|------------|
+| `TruckSession` | `truckId` | Single field |
+| [GpsEvent](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) | `truckId` | Single field |
+| `EventLog` | `truckId` | Single field |
+
+**Missing indexes (CRITICAL):**
+| Collection | Missing Index | Needed For |
+|------------|---------------|------------|
+| [GpsEvent](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) | `{ truckId: 1, timestamp: -1 }` | Efficient latest-per-truck query |
+| [GpsEvent](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) | TTL on `timestamp` | Automatic cleanup |
+| `TruckSession` | `{ truckId: 1, state: 1 }` unique partial | Prevent duplicate active sessions |
+| `EventLog` | `{ truckId: 1, timestamp: -1 }` | Sorted event retrieval |
+
+## 3.7 Duplicate Event Protection
+
+**NONE.** There is no idempotency enforcement anywhere:
+- GPS events: No dedup — same coordinate sent twice creates two records
+- Session events: No request ID — retrying a tare/gross request can succeed twice (though state machine prevents *logical* duplication)
+- State transitions: Protected by ruleEngine but with a race window (non-atomic read-check-write)
+
+## 3.8 Timezone Consistency
+
+GPS events store `timestamp` from the client as `new Date(timestamp)`. The server does NOT enforce timezone or check for time skew. EventLog uses `default: Date.now` (server time). This means:
+- GPS timestamps are in client timezone
+- Event log timestamps are in server timezone (UTC on Render)
+- No clock sync validation
+
+## 3.9 Logging Quality
+
+**POOR.** Logging consists entirely of `console.log` and `console.error` calls with emoji prefixes:
+
+```javascript
+console.log("🔥 HIT PRODUCTION BACKEND");        // locationController.js:45
+console.log("Incoming Body:", req.body);           // locationController.js:46
+console.log("✅ Saved to MongoDB with ID:", gpsEvent._id);  // locationController.js:72
+```
+
+- No structured logging (no Winston, Pino, or Bunyan)
+- No log levels (debug/info/warn/error)
+- No request correlation IDs
+- No log aggregation setup
+- Debug-level logs (`"Incoming Body:"`) dumping full request body in production
+- `req.body` logging may contain sensitive data
+
+## 3.10 Error Handling
+
+The [asyncHandler](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/errorHandler.js#17-25) wrapper + [errorHandler](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/errorHandler.js#1-16) middleware is a solid pattern. However:
+- Error handler sends `err.message` to the client in production (information leakage)
+- No distinction between operational errors and programming errors
+- No process-level error handling (`uncaughtException`, `unhandledRejection`)
+- No graceful shutdown handling (SIGTERM, SIGINT)
+
+## 3.11 Crash Resilience
+
+- No PM2, no cluster mode, no process manager
+- No health check beyond `/api/health` (which doesn't check MongoDB connectivity)
+- No circuit breaker patterns
+- No graceful shutdown — active requests will be dropped
+- Single process — zero redundancy
+
+## 3.12 Memory Leak Risks
+
+- [getGpsEvents()](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) loads entire GPS collection into memory on every call
+- [getAllSessions()](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#74-77) loads all sessions into memory on every call
+- No stream processing for large collections
+- No connection pool limits specified for Mongoose
+
+---
+
+# SECTION 4 — DATABASE AUDIT
+
+## 4.1 Schema Design
+
+### TruckSession
+```javascript
+{
+  truckId: String,     // Non-unique; multiple sessions per truck allowed
+  state: String,       // Enum-validated
+  tareWeight: Number,
+  grossWeight: Number,
+  invoiceStatus: String,
+  movementLock: Boolean,
+  visitCount: Number,
+  timestamps: true     // createdAt, updatedAt
+}
+```
+
+**Issues:**
+- No `_id`-based session identifiers used in API — everything keyed by `truckId` + "not EXITED" filter
+- `state` enum includes `EXITED` but there's no compound index to efficiently find active sessions
+- `visitCount` is mutable without concurrent access protection
+- No `yardId` field for multi-yard scalability
+- No `driverId`, `vehicleRegistration`, or `trailerId` fields
+- Weight fields accept any Number including negative (server checks `> 0` but schema allows it)
+
+### GpsEvent
+```javascript
+{
+  truckId: String,
+  latitude: Number,    // No range validation
+  longitude: Number,   // No range validation
+  accuracy: Number,    // Stored but never used
+  timestamp: Date,
+  eventType: String,   // Always 'GPS_UPDATE'
+  timestamps: true
+}
+```
+
+**Issues:**
+- `eventType` is always `GPS_UPDATE` — redundant field adding storage overhead
+- No TTL index — data grows indefinitely
+- No compound index on `{ truckId, timestamp }`
+- No geospatial index (`2dsphere`) despite being location data — prevents efficient geo-queries if ever needed
+- `accuracy` field is never used for filtering or validation
+
+### EventLog
+```javascript
+{
+  truckId: String,
+  eventType: String,
+  message: String,
+  timestamp: Date     // default: Date.now (server time)
+}
+```
+
+**Issues:**
+- No `timestamps: true` option — no `updatedAt` field
+- `timestamp` uses `Date.now` as default rather than `mongoose.Schema.Types.Date` with timestamp
+- No TTL — audit logs grow indefinitely
+
+## 4.2 Query Efficiency
+
+| Query | Efficiency | Problem |
+|-------|-----------|---------|
+| `TruckSession.findOne({ truckId, state: { $ne: 'EXITED' } })` | ⚠️ Partial index miss | Index on `truckId` helps, but `$ne` negation makes it a range scan on `state` |
+| `GpsEvent.find().sort({ timestamp: -1 })` | 🔴 **TERRIBLE** | Full collection scan, no limit, no index on timestamp |
+| `EventLog.find({ truckId }).sort({ timestamp: -1 })` | ⚠️ Partial | Index on `truckId` helps filter, but `timestamp` sort needs compound index |
+| `TruckSession.find().sort({ updatedAt: -1 })` | ⚠️ Moderate | No explicit index on `updatedAt` (automatic `_id` partially helps) |
+
+## 4.3 Historical Data Retention
+
+**No retention strategy.** GPS events and event logs are never deleted. For 500 trucks at 5-second GPS intervals:
+
+| Duration | GPS Records | Storage (est.) |
+|----------|-------------|----------------|
+| 1 day | 8,640,000 | ~1.3 GB |
+| 1 week | 60,480,000 | ~9 GB |
+| 1 month | 259,200,000 | ~39 GB |
+| 1 year | 3,153,600,000 | ~473 GB |
+
+MongoDB Atlas free tier limits: 512 MB. M10 tier: 2 GB included.
+
+## 4.4 Data Corruption Risks
+
+- **No transactions:** State transition (read session → validate → update → create event) is not atomic. If the process crashes between `session.save()` and `EventLog.create()`, the session state is updated but no event log exists.
+- **No write concerns:** Default write concern `w: 1` means writes are acknowledged by primary only. In Atlas replica sets, a primary failover can lose acknowledged writes.
+- **No schema versioning:** If the schema changes, existing documents are not migrated.
+
+## 4.5 Multi-Yard Scalability
+
+**Not supported.** There is no `yardId` field in any schema. Adding multi-yard support later requires:
+1. Schema migration on all collections
+2. Updating every query to include `yardId` filter
+3. Compound indexes including `yardId`
+4. Yard-level access control
+
+## 4.6 Recommendations for 500+ Trucks
+
+1. **Add TTL index** on [GpsEvent](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85) (e.g., 7-day retention for raw GPS)
+2. **Add compound index** `{ truckId: 1, timestamp: -1 }` on [GpsEvent](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#78-85)
+3. **Add unique partial index** on `TruckSession`: `{ truckId: 1 }` where `state != 'EXITED'`
+4. **Implement server-side aggregation** for latest-GPS-per-truck instead of fetching all
+5. **Add time-series collection** for GPS data (MongoDB 5.0+)
+6. **Archive old session data** to a separate collection or cold storage
+7. **Add `yardId`** to all schemas now, even if single-yard initially
+
+---
+
+# SECTION 5 — FRONTEND DASHBOARD AUDIT
+
+## 5.1 Polling Efficiency
+
+**MapPage** polls `GET /api/events` every 5 seconds ([MapPage.jsx:397](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#L397)). This fetches ALL GPS events from all time.
+
+**FleetOverview** independently polls `GET /api/sessions` every 5 seconds ([FleetOverview.jsx:36](file:///c:/Users/Dhanush/internship-project2/client/src/components/FleetOverview.jsx#L36)).
+
+**App.jsx** also fetches `GET /api/sessions` on mount ([App.jsx:34](file:///c:/Users/Dhanush/internship-project2/client/src/App.jsx#L34)).
+
+With 100 trucks over 1 day, each poll fetches ~1.7 million GPS records. At 5-second intervals, that's **~340K HTTP requests of multi-MB payloads per dashboard per day**.
+
+## 5.2 Memory Leaks in Map Rendering
+
+**Identified leaks:**
+1. **Popup content is never updated for existing markers** — `createPopupContent` is called only when a marker is first created ([MapPage.jsx:300](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#L300)). If truck status changes, the popup shows stale data until the marker is removed and re-created.
+2. **Zone alerts accumulate to 50 max** ([MapPage.jsx:268](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#L268)) — this is bounded, which is good.
+3. **`truckZoneMapRef` grows indefinitely** — entries for trucks that leave are never cleaned up.
+4. **The cleanup effect for markers** ([MapPage.jsx:403-412](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#L403-L412)) runs on unmount but tries to use `mapInstanceRef.current` which is set to `null` in the map initialization cleanup (line 232). Race condition on unmount.
+
+## 5.3 Marker Management
+
+The `updateMarkers` function handles:
+- ✅ Creating new markers
+- ✅ Updating position for existing markers (no flicker)
+- ✅ Removing markers for trucks no longer present
+- ❌ NOT updating popup content for existing markers (stale data)
+- ❌ NOT updating icon for selected/deselected state on data refresh
+- ⚠️ `allSessions` in dependency array of `updateMarkers` — function recreated on every session update
+
+## 5.4 Zone Detection Logic (Client-Side)
+
+Zone transitions are detected by comparing current zone with previous zone stored in `truckZoneMapRef`. This is purely client-side:
+- **Lost on page refresh**
+- **Lost when dashboard is closed**
+- **Not shared across multiple dashboard instances**
+- **5-second detection granularity** — short zone crossings may be missed
+
+## 5.5 Error State Handling
+
+- `fetchAndUpdateLocations` silently fails — if `res.success` is false, no error is shown to the user, and markers simply don't update ([MapPage.jsx:241](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#L241))
+- Map initialization errors are caught and shown ([MapPage.jsx:224](file:///c:/Users/Dhanush/internship-project2/client/src/components/MapPage.jsx#L224))
+- No "connection lost" indicator on the map
+- No "last updated" timestamp shown to user
+
+## 5.6 Backend Failure Handling
+
+- [api.js](file:///c:/Users/Dhanush/internship-project2/client/src/api.js) catches fetch errors and returns `{ success: false, message: '...' }` ([api.js:15-21](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#L15-L21))
+- But MapPage doesn't show this error to the user during polling
+- No retry logic for polling failures
+- No distinction between "server unreachable" and "server returned error"
+
+## 5.7 Map Restriction Security
+
+Yard boundaries are stored in **localStorage** ([YardConfigPanel.jsx:40](file:///c:/Users/Dhanush/internship-project2/client/src/components/YardConfigPanel.jsx#L40)). The `setMaxBounds` restriction is client-only — any user can open DevTools and change bounds. The hardcoded zone polygons in [zoneUtils.js](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js) use coordinates that appear to be a real location in Haryana, India (28.247°N, 76.813°E).
+
+## 5.8 Security Exposure
+
+- **Production API URL is hardcoded** in [api.js line 1](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#L1): `https://truckmanagement-r1vo.onrender.com/api`
+- Not using environment variables via `import.meta.env.VITE_API_URL`
+- Anyone viewing the deployed dashboard's source can discover and abuse the API
+
+## 5.9 Recommendations
+
+1. **Replace polling with WebSockets** (Socket.io) for real-time updates
+2. **Add server-side aggregation endpoint** that returns only latest GPS per truck
+3. **Add "last updated" indicator and connection status** to map UI
+4. **Use environment variables** for API URL (`import.meta.env.VITE_API_URL`)
+5. **Implement React.memo** on heavy components like [TruckListPanel](file:///c:/Users/Dhanush/internship-project2/client/src/components/TruckListPanel.jsx#22-113)
+6. **Add virtualization** for long lists (fleet table, event log)
+7. **Move zone detection to server** for reliability and persistence
+
+---
+
+# SECTION 6 — GEO-FENCE & ZONE LOGIC VALIDATION
+
+## 6.1 Polygon Containment Logic
+
+The ray casting algorithm in [zoneUtils.js:77-92](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js#L77-L92) is mathematically correct for simple polygons. However:
+
+**Issues:**
+- **No precision handling** — floating point comparison without epsilon tolerance
+- **Edge cases on polygon boundaries** — points exactly on an edge may return inconsistent results due to floating point
+- The fallback quadrant logic ([zoneUtils.js:129-135](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js#L129-L135)) uses `MID_LAT` and `MID_LNG` as hardcoded constants. If the yard polygon is irregular, these midpoints don't actually divide the yard into equal quadrants.
+
+## 6.2 Edge Boundary Behavior
+
+The zones are defined as quadrants of a non-rectangular polygon. The yard boundary vertices:
+```
+topLeft:     [28.248830, 76.810912]
+topRight:    [28.249022, 76.817142]
+bottomRight: [28.246316, 76.815363]
+bottomLeft:  [28.246303, 76.810978]
+```
+
+This is a **trapezoid** (the top edge is wider than the bottom). The midpoint-based quadrant division creates zones that:
+- Leave gaps at the polygon edges where the quadrant grid extends beyond the actual yard boundary
+- Can return `OUTSIDE` from [isInsideYard](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js#94-109) but then the fallback quadrant logic returns a zone name — **logical contradiction**
+
+The code handles this with a two-step check (yard first, then zones), but the fallback logic on lines 129-135 can fire for points that ARE inside the yard but don't match any zone polygon due to floating-point edge effects. This means a truck sitting on a zone boundary could oscillate between zones on successive readings.
+
+## 6.3 GPS Drift Handling
+
+**NOT HANDLED.** With 5-second GPS intervals, a stationary truck with poor GPS signal could drift ±10-20 meters between readings. If the truck is near a zone boundary, this causes:
+- Rapid zone switching (ZONE_A → ZONE_B → ZONE_A every 5 seconds)
+- Alert flooding (zone transition alert every 5 seconds)
+
+**Needed:** Hysteresis/debounce — require the truck to remain in a new zone for at least N consecutive readings before registering a transition.
+
+## 6.4 Zone Coordinate Hardcoding
+
+The zone geometry is **hardcoded** in [zoneUtils.js](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js). The yard config panel ([YardConfigPanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/YardConfigPanel.jsx)) lets users configure the outer boundary but NOT the internal zone divisions. So if the yard boundary changes, the zones still point to the original coordinates — they don't auto-subdivide.
+
+## 6.5 Server vs Client Validation
+
+| Aspect | Server | Client |
+|--------|--------|--------|
+| Yard boundary check | ❌ Not implemented | ✅ [isInsideYard()](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js#94-109) |
+| Zone detection | ❌ Not implemented | ✅ [detectZone()](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js#110-137) |
+| Zone alerts | ❌ Not implemented | ✅ In-memory only |
+| Geofence persistence | ❌ | ❌ Lost on refresh |
+
+**Verdict: Entirely client-side. Not production-viable.**
+
+## 6.6 Recommendations
+
+1. **Move geofencing to server** — detect zones on GPS ingest, store current zone in session
+2. **Add hysteresis** — require 3 consecutive readings in new zone before transition
+3. **Add GPS accuracy filter** — ignore readings with accuracy > 30m for zone detection
+4. **Store zone polygons in database** — allow dynamic configuration
+5. **Add buffer zones** — 5m buffer between zone edges to prevent boundary oscillation
+6. **Apply Kalman filtering** or moving average to GPS coordinates before zone detection
+
+---
+
+# SECTION 7 — FAILURE SCENARIO ANALYSIS
+
+| # | Scenario | Current Behavior | Expected Behavior | Recommended Mitigation |
+|---|----------|-----------------|-------------------|----------------------|
+| 1 | **Server down** | Dashboard silently shows stale data. Android app GPS uploads fail silently (no offline buffer). | Dashboard should show "Connection Lost" indicator. App should buffer locally. | WebSocket with disconnect detection. Client-side offline buffer with retry queue. |
+| 2 | **MongoDB unavailable** | Server crashes on startup (correct). At runtime: unhandled promise rejection in controllers leads to 500 errors. | Graceful degradation — serve cached data, queue writes for retry. | Circuit breaker pattern. In-memory queue for writes. Health check pinging MongoDB. |
+| 3 | **Network unstable** | Each failed GPS upload is lost. No retry. Dashboard polling fails silently. | Buffer GPS data. Retry with exponential backoff. Show connectivity status. | Offline buffer queue on Android. Retry middleware. Connectivity indicator on dashboard. |
+| 4 | **Driver turns off data** | GPS uploads stop. Dashboard shows last known position with no "stale" indicator. | Dashboard should mark truck as "GPS Lost" after N missed updates. Last known position should show age. | Add `lastSeenAt` field. Dashboard marks trucks stale after 30s of no updates. Notify operator. |
+| 5 | **Driver force closes app** | GPS uploads stop immediately. No cleanup. | Server should detect missing heartbeat. Session should be flagged as "APP_DISCONNECTED". | Heartbeat mechanism. Server-side timeout detector. |
+| 6 | **BLE device removed** | N/A — BLE not implemented. | N/A | Plan for BLE timeout detection when implementing. |
+| 7 | **GPS spoofing** | Server accepts any coordinates without validation. | Server should validate coordinates are within a reasonable geographic area. | Validate lat/lng within expected yard region (±50km). Flag suspiciously fast movements (>200km/h). |
+| 8 | **Duplicate QR scan** | N/A — QR not implemented. Session start checks for active session, which is correct. | 409 Conflict returned for duplicate. | The current logic handles this, but with the race condition noted in Section 1.2. |
+| 9 | **Same truck double session** | [startSession](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#24-30) checks for existing non-EXITED session. Returns 409. | Correct behavior. | Fix the race condition with database-level uniqueness constraint. |
+| 10 | **Out-of-order location packets** | All packets are stored as-is. Client deduplication uses latest timestamp, which handles this correctly. | Correct for display. But server stores all, wasting space. | Server should check if incoming timestamp < last known timestamp for truckId. Discard or flag. |
+
+---
+
+# SECTION 8 — SECURITY AUDIT
+
+## 8.1 API Security
+
+> [!CAUTION]
+> **SEVERITY: CRITICAL**
+>
+> **All endpoints are completely unauthenticated.** Any person with the API URL can:
+> - Read all truck locations and session data
+> - Create fake sessions
+> - Manipulate weight recordings (set grossWeight to any value)
+> - Generate fraudulent invoices
+> - Mark trucks as exited
+> - Flood the GPS database
+>
+> This is **unacceptable for a production industrial system** handling billing-relevant data (weights, invoices).
+
+## 8.2 JWT / Token Usage
+
+**NOT IMPLEMENTED.** No JWT, no API tokens, no session management.
+
+## 8.3 Secrets Management
+
+| File | Finding | Severity |
+|------|---------|----------|
+| [server/.env](file:///c:/Users/Dhanush/internship-project2/server/.env) | MongoDB Atlas connection string with credentials | Should be env-injected in deployment |
+| [server/.env.example](file:///c:/Users/Dhanush/internship-project2/server/.env.example) | Template file — correct practice | OK |
+| [client/src/api.js](file:///c:/Users/Dhanush/internship-project2/client/src/api.js) | **Production API URL hardcoded** in source code | HIGH — should use `VITE_API_URL` env var |
+| [.gitignore](file:///c:/Users/Dhanush/internship-project2/.gitignore) | Should exclude [.env](file:///c:/Users/Dhanush/internship-project2/client/.env) | Must verify |
+
+## 8.4 Hardcoded Keys
+
+- **Production backend URL** hardcoded: `https://truckmanagement-r1vo.onrender.com/api`
+- **Yard coordinates** hardcoded in [zoneUtils.js](file:///c:/Users/Dhanush/internship-project2/client/src/utils/zoneUtils.js) — reveals physical yard location
+- **Tile server URL** hardcoded: `https://{s}.basemaps.cartocdn.com/dark_all/...`
+
+## 8.5 SSL Enforcement
+
+- Render.com provides HTTPS by default — ✅
+- But no HSTS headers set by the server
+- No `helmet` middleware (recommended for Express security headers)
+- MongoDB Atlas enforces TLS — ✅
+
+## 8.6 Data Tampering Risks
+
+| Risk | Exposure | Impact |
+|------|----------|--------|
+| Weight manipulation | Anyone can POST arbitrary weights | Financial fraud (billing based on net weight) |
+| Invoice forgery | Anyone can trigger invoice generation | Unauthorized billing |
+| GPS spoofing | No validation of GPS source | Truck appears in wrong location |
+| Session manipulation | Anyone can advance session state | Process integrity compromised |
+| Event log tampering | Events can be injected | Audit trail unreliable |
+
+## 8.7 Location Spoofing
+
+- Server does NOT validate that GPS coordinates are plausible (e.g., within India, within 100km of yard)
+- No velocity check — a truck "teleporting" 1000km in 5 seconds would be accepted
+- No correlation between GPS source and session truckId
+- No device authentication
+
+## 8.8 Replay Attacks
+
+- No request signing, no nonce, no timestamp validation window
+- An intercepted GPS payload can be replayed indefinitely
+- An intercepted session state transition can be replayed (though state machine prevents effective replay of most transitions)
+
+## 8.9 DoS Risks
+
+- **No rate limiting on any endpoint**
+- **No request body size limit** configured (Express default 100KB, but still exploitable)
+- **`POST /api/location`** can be hammered to fill MongoDB storage
+- **`GET /api/events`** returns entire database — a single request could consume significant server memory
+- **No IP blacklisting mechanism**
+
+## 8.10 Security Hardening Roadmap
+
+**Phase 1 — Immediate (before production):**
+1. Add API key authentication for Android app (`X-API-Key` header)
+2. Add `helmet` middleware for security headers
+3. Add `express-rate-limit` (limit `/api/location` to 1 req/sec per truckId)
+4. Move API URL to environment variable
+5. Add request body size limit (`express.json({ limit: '10kb' })`)
+6. Remove debug `console.log` statements from production code
+
+**Phase 2 — Short-term:**
+1. JWT-based authentication for dashboard users
+2. Role-based access control (operator vs. admin)
+3. Input sanitization (e.g., `xss` package or DOMPurify)
+4. Request signing for Android app (HMAC)
+5. GPS coordinate plausibility checking
+6. Audit logging for all state transitions with operator identity
+
+**Phase 3 — Long-term:**
+1. mTLS for Android-to-server communication
+2. Certificate pinning in Android app
+3. Hardware security module for sensitive operations (weight recording)
+4. Encrypted database fields for PII
+5. SIEM integration for security monitoring
+
+---
+
+# SECTION 9 — SCALABILITY & LOAD
+
+## 9.1 Current Architecture Bottlenecks
+
+```mermaid
+graph LR
+    A["100 Trucks<br/>5-sec GPS"] -->|"20 req/s"| B["Single Node.js<br/>Process"]
+    B -->|"20 writes/s"| C["MongoDB Atlas<br/>Shared Tier"]
+    D["5 Dashboards<br/>5-sec polling"] -->|"1 req/s each<br/>FULL DB READ"| B
+```
+
+## 9.2 Load Analysis
+
+### 100 Trucks
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| GPS write throughput | 20 req/s | ⚠️ Manageable but no headroom |
+| GPS records/day | 1,728,000 | ⚠️ ~260 MB/day |
+| Dashboard poll payload | ~1.7M records per poll | 🔴 **WILL CRASH** |
+| API throughput (polling + writes) | ~25 req/s | ⚠️ Single process limit |
+| Render free tier limit | 750 hours/month | ✅ Fits |
+
+**Verdict at 100 trucks: The `GET /api/events` endpoint will break within hours as GPS data accumulates.**
+
+### 300 Trucks
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| GPS write throughput | 60 req/s | 🔴 Single process may bottleneck |
+| GPS records/day | 5,184,000 | 🔴 ~780 MB/day |
+| Dashboard poll payload | ~5M+ records | 🔴 **UNWORKABLE** |
+| MongoDB Atlas M10 | 10 GB storage | 🔴 Fills in ~13 days |
+| Concurrent connections | 300 Android + N dashboards | ⚠️ Mongoose pool default = 5 |
+
+**Verdict at 300 trucks: System fails within the first day.**
+
+### 1000 Trucks
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| GPS write throughput | 200 req/s | 🔴 Requires clustering |
+| GPS records/day | 17,280,000 | 🔴 2.6 GB/day |
+| MongoDB | Requires M30+ or sharding | 🔴 |
+| API response time | Seconds to minutes | 🔴 |
+| Network bandwidth | 10+ MB per dashboard poll | 🔴 |
+
+**Verdict at 1000 trucks: Fundamentally incompatible with current architecture.**
+
+## 9.3 Recommended Architectural Upgrades
+
+**For 100 trucks:**
+1. Add `limit()` and time-window filter to GPS event queries
+2. Add server-side aggregation endpoint (latest per truck)
+3. Add TTL index on GPS events (7-day retention)
+4. Increase Mongoose connection pool
+
+**For 300 trucks (requires rearchitecture):**
+1. **Redis** for caching latest truck positions (update on GPS ingest, read from cache for dashboard)
+2. **WebSocket** (Socket.io) to push updates instead of polling
+3. **Message queue** (BullMQ + Redis) for GPS event processing
+4. **Worker process** for heavy aggregations
+5. MongoDB Atlas M30 tier minimum
+
+**For 1000 trucks (requires new architecture):**
+1. **Kubernetes** or containerized deployment with horizontal scaling
+2. **MongoDB Time Series** collections for GPS data
+3. **Apache Kafka** or NATS for GPS event streaming
+4. **Redis Cluster** for position cache
+5. **ClickHouse** or TimescaleDB for analytics queries
+6. **CDN** for static assets
+7. **Load balancer** (NGINX) with multiple Node.js instances
+
+---
+
+# SECTION 10 — PRODUCTION READINESS SCORE
+
+## 10.1 Scores
+
+| Category | Score | Justification |
+|----------|-------|---------------|
+| **Stability** | **3/10** | Race conditions in session creation, no graceful shutdown, no process management, no health monitoring, silent failures in polling |
+| **Security** | **1/10** | Zero authentication, zero authorization, zero rate limiting, zero input sanitization, hardcoded production URL, XSS risk, API fully exposed |
+| **Scalability** | **2/10** | Fetches entire GPS collection on every poll, no pagination, single process, no caching, no WebSocket. Will break with data accumulation even at 10 trucks over days |
+| **Code Quality** | **5/10** | Clean structure, consistent API response format, state machine pattern, asyncHandler wrapper. But: debug logs in production, installed-but-unused dependencies, duplicated code across components, no tests, no TypeScript |
+| **Deployment Readiness** | **2/10** | Free-tier Render hosting, no CI/CD visible, no environment-based config, hardcoded URLs, no monitoring, no alerting, no log aggregation |
+
+### **Overall Production Readiness: 2.6 / 10**
+
+> [!CAUTION]
+> **This system is NOT ready for production deployment in a live industrial steel yard.** Deploying it as-is risks: financial data manipulation, GPS data loss, system crashes under real load, and complete absence of access control.
+
+---
+
+## 10.2 Immediate Fixes (HIGH PRIORITY — Before Any Production Use)
+
+| # | Fix | Effort | Impact |
+|---|-----|--------|--------|
+| 1 | **Add authentication** — API key for Android, JWT for dashboard | 2-3 days | Blocks unauthorized access |
+| 2 | **Fix GPS query** — Add `.limit()` and time-window filter, or server-side aggregation | 1 day | Prevents OOM crashes |
+| 3 | **Add rate limiting** — `express-rate-limit` on all endpoints | 1 hour | Prevents DoS |
+| 4 | **Add TTL index** on `GpsEvent.timestamp` (e.g., 7 days) | 30 min | Prevents storage exhaustion |
+| 5 | **Fix race condition** — unique partial index on `TruckSession { truckId }` where `state != 'EXITED'` | 1 hour | Prevents double sessions |
+| 6 | **Remove debug logs** — Remove `console.log("🔥 HIT PRODUCTION BACKEND")` and body logging | 30 min | Prevents log noise and data leaks |
+| 7 | **Add `helmet` middleware** | 15 min | Security headers |
+| 8 | **Move API URL to env var** | 15 min | Prevents credential exposure |
+| 9 | **Add compound indexes** on `GpsEvent { truckId, timestamp }` and `EventLog { truckId, timestamp }` | 30 min | Query performance |
+| 10 | **Add GPS coordinate validation** — reject if outside ±1° of yard center | 1 hour | Prevents GPS spoofing |
+
+## 10.3 Short-Term Improvements (1-2 Weeks)
+
+| # | Improvement | Effort |
+|---|-------------|--------|
+| 1 | Replace polling with WebSocket (Socket.io) | 3-4 days |
+| 2 | Add structured logging (Pino or Winston) | 1 day |
+| 3 | Move geofence detection to server | 2 days |
+| 4 | Add graceful shutdown handling (SIGTERM) | 2 hours |
+| 5 | Add process manager (PM2) or cluster mode | 1 day |
+| 6 | Add input validation middleware using `express-validator` (already installed) | 2 days |
+| 7 | Add idempotency keys for GPS uploads | 1 day |
+| 8 | Add "GPS stale" detection (mark truck as lost after 30s of no data) | 1 day |
+| 9 | Add server-side latest-position cache (in-memory or Redis) | 1-2 days |
+| 10 | Add basic test suite (Jest + Supertest for API, Vitest for frontend) | 3-4 days |
+
+## 10.4 Long-Term Architectural Upgrades (1-3 Months)
+
+| # | Upgrade | Effort |
+|---|---------|--------|
+| 1 | Redis caching layer for real-time position data | 1 week |
+| 2 | Message queue (BullMQ) for async GPS processing | 1 week |
+| 3 | MongoDB Time Series collection for GPS data | 1 week |
+| 4 | Role-based access control with user management | 2 weeks |
+| 5 | Multi-yard support (yardId in all schemas, yard-level auth) | 2 weeks |
+| 6 | CI/CD pipeline (GitHub Actions → Render) | 1 week |
+| 7 | Monitoring + alerting (Datadog, New Relic, or Grafana) | 1 week |
+| 8 | TypeScript migration | 2-3 weeks |
+| 9 | Mobile app hardening (BLE, offline mode, cert pinning) | 3-4 weeks |
+| 10 | Kubernetes deployment for horizontal scaling | 2-3 weeks |
+
+---
+
+## Summary Architecture Diagram (Current vs. Target)
+
+```mermaid
+graph TB
+    subgraph "CURRENT (2/10)"
+        A1["Android App"] -->|"HTTP POST<br/>No Auth"| B1["Single Express<br/>(Render Free)"]
+        B1 -->|"Direct Write"| C1["MongoDB Atlas<br/>(Shared)"]
+        D1["React Dashboard"] -->|"5s Poll<br/>FULL DB READ"| B1
+    end
+
+    subgraph "TARGET (8/10)"
+        A2["Android App<br/>+ Offline Buffer"] -->|"HTTPS + API Key<br/>+ Idempotency"| LB["Load Balancer"]
+        LB --> B2a["Express #1"]
+        LB --> B2b["Express #2"]
+        B2a --> Q["Redis<br/>Cache + Queue"]
+        B2b --> Q
+        Q --> C2["MongoDB Atlas<br/>(M30+)<br/>+ Time Series"]
+        D2["React Dashboard<br/>+ Auth"] <-->|"WebSocket"| B2a
+        D2 <-->|"WebSocket"| B2b
+        Q --> W["Worker<br/>Geofence + Alerts"]
+    end
+```
+
+---
+
+**END OF AUDIT REPORT**
