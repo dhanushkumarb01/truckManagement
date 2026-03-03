@@ -1,6 +1,20 @@
 /**
- * Zone Utilities for Yard Management
- * Defines 4 internal zones within the yard polygon and detection logic
+ * @deprecated Zone Utilities for Yard Management
+ * 
+ * THIS FILE IS DEPRECATED.
+ * 
+ * Zone definitions are now stored in the database and fetched via API:
+ * - GET /api/zones - Fetch all zones
+ * - Zone model with GeoJSON and 2dsphere indexing
+ * - Server-side zone detection via Zone.findZoneContaining()
+ * 
+ * This file is kept for backward compatibility with existing data
+ * that may reference ZONE_A, ZONE_B, etc. zone names.
+ * 
+ * DO NOT USE these exports in new code. Instead:
+ * - Fetch zones from backend API
+ * - Use zone.color from database for styling
+ * - Rely on server-side zone detection
  */
 
 // Yard boundary coordinates
@@ -16,7 +30,7 @@ const MID_LAT = 28.247566;
 const MID_LNG = 76.814027;
 
 /**
- * Zone polygon coordinates (for drawing on map)
+ * @deprecated Zone polygon coordinates - use database zones instead
  * Each zone is a quadrant of the yard
  */
 export const ZONE_POLYGONS = {
@@ -47,7 +61,7 @@ export const ZONE_POLYGONS = {
 };
 
 /**
- * Zone colors for visual differentiation
+ * @deprecated Zone colors - use zone.color from database instead
  */
 export const ZONE_COLORS = {
     ZONE_A: '#f59e0b', // Amber
@@ -57,7 +71,7 @@ export const ZONE_COLORS = {
 };
 
 /**
- * Zone labels for display
+ * @deprecated Zone labels - zone names stored in database
  */
 export const ZONE_LABELS = {
     ZONE_A: 'Zone A (Top-Left)',
@@ -108,7 +122,7 @@ export function isInsideYard(lat, lng) {
 }
 
 /**
- * Detect which zone a point is in
+ * @deprecated Detect zone client-side - use server-side detection instead
  * @param {number} lat - Latitude
  * @param {number} lng - Longitude
  * @returns {string} - 'ZONE_A' | 'ZONE_B' | 'ZONE_C' | 'ZONE_D' | 'OUTSIDE'

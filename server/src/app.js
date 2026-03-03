@@ -7,6 +7,12 @@ import eventRoutes from './routes/eventRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
+// ============ NEW MODULE ROUTES ============
+import fastagRoutes from './routes/fastagRoutes.js';
+import vehicleRoutes from './routes/vehicleRoutes.js';
+import zoneRoutes from './routes/zoneRoutes.js';
+import alertsRoutes from './routes/alertsRoutes.js';
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -29,7 +35,7 @@ app.use(
             // Block others
             callback(new Error('Not allowed by CORS'));
         },
-        methods: ['GET', 'POST'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
         credentials: true,
     })
 );
@@ -42,6 +48,12 @@ app.use('/api/session', sessionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/location', locationRoutes);
 app.get('/api/sessions', getAllSessions);
+
+// --- NEW MODULE ROUTES ---
+app.use('/api/fastag', fastagRoutes);
+app.use('/api/vehicles', vehicleRoutes);
+app.use('/api/zones', zoneRoutes);
+app.use('/api/alerts', alertsRoutes);
 
 // --- Health check ---
 app.get('/api/health', (_req, res) => {

@@ -11,7 +11,12 @@ import TruckListPanel from './TruckListPanel';
 import SimulationSidebar from './SimulationSidebar';
 import YardConfigPanel, { getYardConfig } from './YardConfigPanel';
 import TestingPanel from './TestingPanel';
-import { ZONE_POLYGONS, ZONE_COLORS, detectZone } from '../utils/zoneUtils';
+// NOTE: Hardcoded zone utils removed - now using database-driven zones
+
+// ============ NEW MODULE IMPORTS ============
+import ZoneDrawPanel from './ZoneDrawPanel';
+import AlertsPanel from './AlertsPanel';
+import VehiclePanel from './VehiclePanel';
 
 // Fix Leaflet default icon issue with Vite/Webpack bundlers
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
@@ -93,15 +98,16 @@ function MapPage({
     const markersRef = useRef({}); // Dictionary: truckId -> L.marker
     const yardPolygonRef = useRef(null); // Yard boundary polygon layer
     const zoneLayersRef = useRef(null); // Zone polygons layer group
-    const truckZoneMapRef = useRef({}); // Dictionary: truckId -> current zone
+    // NOTE: truckZoneMapRef removed - zone detection moved to server-side
     
     const [truckLocations, setTruckLocations] = useState({});
     const [selectedTruckId, setSelectedTruckId] = useState(null);
     const [mapLoaded, setMapLoaded] = useState(false);
     const [mapError, setMapError] = useState(null);
-    const [sidebarTab, setSidebarTab] = useState('trucks'); // 'trucks' | 'simulation' | 'yard' | 'testing'
+    const [sidebarTab, setSidebarTab] = useState('trucks'); // 'trucks' | 'simulation' | 'yard' | 'testing' | 'zones' | 'alerts' | 'vehicles'
     const [yardConfig, setYardConfig] = useState(() => getYardConfig());
-    const [zoneAlerts, setZoneAlerts] = useState([]);
+    const [zoneAlerts, setZoneAlerts] = useState([]); // Kept for TestingPanel compatibility
+    const [dbZones, setDbZones] = useState([]); // Zones from database
 
     /**
      * Apply yard configuration to the map
@@ -145,15 +151,22 @@ function MapPage({
         
         // Small delay to ensure fitBounds completes before setting restrictions
         setTimeout(() => {
-            map.setMaxBounds(bounds.pad(0.1)); // Slight padding to prevent edge sticking
-            map.options.minZoom = map.getZoom(); // Prevent zooming out beyond polygon
+            try {
+                // Guard: ensure map still exists and is usable
+                if (!map || !map._container || !map._loaded) return;
+                map.setMaxBounds(bounds.pad(0.1)); // Slight padding to prevent edge sticking
+                map.options.minZoom = map.getZoom(); // Prevent zooming out beyond polygon
+            } catch {
+                // Map was destroyed during HMR/unmount - ignore
+            }
         }, 100);
     }, []);
 
     /**
-     * Draw zone polygons on the map (4 internal zones)
+     * Draw zone polygons on the map (dynamically from database)
+     * Now uses zones fetched from DB instead of hardcoded ZONE_POLYGONS
      */
-    const drawZonePolygons = useCallback((map) => {
+    const drawZonePolygons = useCallback((map, zonesToDraw = []) => {
         if (!map) return;
         
         // Remove existing zone layers if any
@@ -165,19 +178,23 @@ function MapPage({
         // Create layer group for zones
         const zoneLayerGroup = L.layerGroup();
         
-        // Draw each zone polygon
-        Object.entries(ZONE_POLYGONS).forEach(([zoneName, coordinates]) => {
-            const color = ZONE_COLORS[zoneName];
+        // Draw each zone polygon from database
+        zonesToDraw.forEach((zone) => {
+            // Use leafletCoordinates from DB (already in [lat, lng] format)
+            const coordinates = zone.leafletCoordinates;
+            if (!coordinates || coordinates.length < 3) return;
+            
+            const color = zone.color || '#3b82f6';
             const polygon = L.polygon(coordinates, {
                 color: color,
                 fillColor: color,
-                fillOpacity: 0.15,
+                fillOpacity: zone.fillOpacity || 0.15,
                 weight: 1,
                 dashArray: '3, 6'
             });
             
             // Add zone label tooltip
-            polygon.bindTooltip(zoneName.replace('_', ' '), {
+            polygon.bindTooltip(zone.zoneName || 'Zone', {
                 permanent: false,
                 direction: 'center',
                 className: 'zone-tooltip'
@@ -210,8 +227,8 @@ function MapPage({
 
             mapInstanceRef.current = map;
 
-            // Draw zone polygons
-            drawZonePolygons(map);
+            // Draw zone polygons (initially empty, will be populated after API fetch)
+            drawZonePolygons(map, []);
 
             // Apply yard config if exists
             const savedYardConfig = getYardConfig();
@@ -242,31 +259,9 @@ function MapPage({
             const latestLocations = processGpsEvents(res.data);
             setTruckLocations(latestLocations);
             
-            // Zone transition detection
-            const newAlerts = [];
-            Object.entries(latestLocations).forEach(([truckId, location]) => {
-                const currentZone = detectZone(location.latitude, location.longitude);
-                const previousZone = truckZoneMapRef.current[truckId];
-                
-                // Check for zone transition
-                if (previousZone && previousZone !== currentZone) {
-                    newAlerts.push({
-                        id: `${truckId}-${Date.now()}`,
-                        truckId,
-                        fromZone: previousZone,
-                        toZone: currentZone,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-                
-                // Update zone map
-                truckZoneMapRef.current[truckId] = currentZone;
-            });
-            
-            // Add new alerts if any
-            if (newAlerts.length > 0) {
-                setZoneAlerts(prev => [...prev, ...newAlerts].slice(-50)); // Keep last 50 alerts
-            }
+            // NOTE: Zone transition detection removed from client-side.
+            // Zone detection is now done server-side via Zone.findZoneContaining().
+            // Zone alerts are fetched from backend AlertsPanel instead.
             
             // Update markers on map
             if (mapInstanceRef.current) {
@@ -386,6 +381,37 @@ function MapPage({
         setZoneAlerts([]);
     }, []);
 
+    // Handle zones loaded from database
+    const handleZonesChange = useCallback((zones) => {
+        setDbZones(zones);
+        // Redraw zones from database on map
+        if (mapInstanceRef.current) {
+            drawZonePolygons(mapInstanceRef.current, zones);
+        }
+    }, [drawZonePolygons]);
+
+    // Fetch zones from database on load
+    const fetchZones = useCallback(async () => {
+        try {
+            const res = await api.getZones();
+            if (res.success && Array.isArray(res.data)) {
+                setDbZones(res.data);
+                // Draw zones on map
+                if (mapInstanceRef.current) {
+                    drawZonePolygons(mapInstanceRef.current, res.data);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch zones:', error);
+        }
+    }, [drawZonePolygons]);
+
+    // Initial zone fetch when map is loaded
+    useEffect(() => {
+        if (!mapLoaded) return;
+        fetchZones();
+    }, [mapLoaded, fetchZones]);
+
     // Initial fetch and polling setup
     useEffect(() => {
         if (!mapLoaded) return;
@@ -427,7 +453,7 @@ function MapPage({
                         className={`sidebar-tab ${sidebarTab === 'simulation' ? 'active' : ''}`}
                         onClick={() => setSidebarTab('simulation')}
                     >
-                        🔧 Simulation
+                        🔧 Sim
                     </button>
                     <button 
                         className={`sidebar-tab ${sidebarTab === 'yard' ? 'active' : ''}`}
@@ -436,10 +462,28 @@ function MapPage({
                         🏭 Yard
                     </button>
                     <button 
+                        className={`sidebar-tab ${sidebarTab === 'zones' ? 'active' : ''}`}
+                        onClick={() => setSidebarTab('zones')}
+                    >
+                        🗺️ Zones
+                    </button>
+                    <button 
+                        className={`sidebar-tab ${sidebarTab === 'alerts' ? 'active' : ''}`}
+                        onClick={() => setSidebarTab('alerts')}
+                    >
+                        🚨 Alerts
+                    </button>
+                    <button 
+                        className={`sidebar-tab ${sidebarTab === 'vehicles' ? 'active' : ''}`}
+                        onClick={() => setSidebarTab('vehicles')}
+                    >
+                        🚛 Vehicles
+                    </button>
+                    <button 
                         className={`sidebar-tab ${sidebarTab === 'testing' ? 'active' : ''}`}
                         onClick={() => setSidebarTab('testing')}
                     >
-                        🧪 Testing
+                        🧪 Test
                     </button>
                 </div>
                 
@@ -472,6 +516,22 @@ function MapPage({
                             onConfigSaved={handleYardConfigSaved}
                             currentConfig={yardConfig}
                         />
+                    )}
+                    {sidebarTab === 'zones' && (
+                        <ZoneDrawPanel
+                            map={mapInstanceRef.current}
+                            onZonesChange={handleZonesChange}
+                            zones={dbZones}
+                        />
+                    )}
+                    {sidebarTab === 'alerts' && (
+                        <AlertsPanel
+                            autoRefresh={true}
+                            refreshInterval={30000}
+                        />
+                    )}
+                    {sidebarTab === 'vehicles' && (
+                        <VehiclePanel />
                     )}
                     {sidebarTab === 'testing' && (
                         <TestingPanel

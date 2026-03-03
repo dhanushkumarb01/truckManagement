@@ -1369,3 +1369,226 @@ body {
 .zone-tooltip::before {
   display: none !important;
 }
+
+/* ============ NEW MODULE STYLES ============ */
+
+/* Zone Draw Panel */
+.zone-draw-panel {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.zone-draw-panel .zones-list {
+  margin-top: 12px;
+}
+
+.zone-draw-panel .zone-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Leaflet Draw Override for Dark Theme */
+.leaflet-draw-toolbar a {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+}
+
+.leaflet-draw-toolbar a:hover {
+  background-color: var(--bg-card-hover) !important;
+}
+
+.leaflet-draw-actions {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border) !important;
+}
+
+.leaflet-draw-actions a {
+  background-color: var(--bg-card) !important;
+  color: var(--text) !important;
+}
+
+.leaflet-draw-actions a:hover {
+  background-color: var(--bg-card-hover) !important;
+}
+
+/* Alerts Panel */
+.alerts-panel {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.alerts-panel .alert-tabs button {
+  font-size: 0.75rem;
+  padding: 6px 10px;
+}
+
+.alerts-panel .alert-item {
+  transition: transform 0.15s ease;
+}
+
+.alerts-panel .alert-item:hover {
+  transform: translateX(2px);
+}
+
+.alert-badge {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Vehicle Panel */
+.vehicle-panel {
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.vehicle-panel .form-input,
+.vehicle-panel .form-select {
+  width: 100%;
+}
+
+/* Compact Sidebar Tabs for More Items */
+.sidebar-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-tab {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.sidebar-tab:hover {
+  background: var(--bg-card-hover);
+  color: var(--text);
+}
+
+.sidebar-tab.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+
+/* Severity Colors */
+.severity-low {
+  color: var(--green);
+}
+
+.severity-medium {
+  color: var(--amber);
+}
+
+.severity-high {
+  color: var(--red);
+}
+
+.severity-critical {
+  background: var(--red);
+  color: white;
+  animation: flash 1s infinite;
+}
+
+@keyframes flash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Button Variants */
+.btn-primary {
+  background: var(--blue);
+  color: white;
+  border-color: var(--blue);
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+
+/* Form Inputs */
+.form-input,
+.form-select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.875rem;
+  transition: border-color var(--transition);
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.form-input::placeholder {
+  color: var(--text-dim);
+}
+
+/* Scrollbar Styling */
+.alerts-panel::-webkit-scrollbar,
+.zone-draw-panel::-webkit-scrollbar,
+.vehicle-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.alerts-panel::-webkit-scrollbar-track,
+.zone-draw-panel::-webkit-scrollbar-track,
+.vehicle-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.alerts-panel::-webkit-scrollbar-thumb,
+.zone-draw-panel::-webkit-scrollbar-thumb,
+.vehicle-panel::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.alerts-panel::-webkit-scrollbar-thumb:hover,
+.zone-draw-panel::-webkit-scrollbar-thumb:hover,
+.vehicle-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
