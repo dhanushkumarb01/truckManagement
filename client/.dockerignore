@@ -1,0 +1,47 @@
+# ============================================
+# Docker Ignore - Frontend
+# Excludes unnecessary files from Docker build context
+# ============================================
+
+# Dependencies
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files (build args used instead)
+.env.local
+.env.development
+
+# Git
+.git
+.gitignore
+
+# IDE and Editor
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts (we build inside Docker)
+dist
+build
+
+# Test files
+coverage
+.nyc_output
+__tests__
+*.test.js
+*.test.jsx
+*.spec.js
+*.spec.jsx
+
+# Documentation
+README.md
+docs
+*.md
