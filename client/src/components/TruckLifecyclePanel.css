@@ -1,0 +1,336 @@
+/**
+ * TruckLifecyclePanel.css
+ * 
+ * Dedicated styles for the Truck Lifecycle page.
+ * 3-column layout matching the reference UI exactly.
+ */
+
+/* ===== Main Layout Grid ===== */
+.lifecycle-layout {
+  display: grid;
+  /* Slightly wider left column so the Active Trucks selector text doesn't clip */
+  grid-template-columns: 280px 1fr 320px;
+  gap: 20px;
+  padding: 24px;
+  flex: 1;
+  width: 100%;
+  align-items: start;
+}
+
+/* ===== Panel Base ===== */
+.lc-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.lc-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.lc-panel__icon {
+  color: var(--blue);
+  font-size: 0.6rem;
+}
+
+.lc-panel__title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* ===== Left Panel — Truck Selector ===== */
+.lc-panel--left {
+  /* Compact height */
+}
+
+.lc-selector {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  /* Prevent the selected value from visually clipping at the edges */
+  box-sizing: border-box;
+}
+
+.lc-selector:hover,
+.lc-selector:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.lc-selector option {
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px;
+}
+
+/* ===== Center Panel — Session Status ===== */
+.lc-panel--center {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Progress Tracker */
+.lc-progress {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  position: relative;
+  padding: 0 10px;
+}
+
+.lc-progress__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  z-index: 1;
+}
+
+.lc-progress__dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+.lc-progress__dot--completed {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
+}
+
+.lc-progress__dot--active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.lc-progress__label {
+  margin-top: 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.lc-progress__connector {
+  position: absolute;
+  top: 15px;
+  left: calc(50% + 20px);
+  width: calc(100% - 40px);
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.lc-progress__connector--filled {
+  background: var(--green);
+}
+
+/* Badges */
+.lc-badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.lc-badge {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lc-badge--blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--blue);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.lc-badge--green {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.lc-badge--amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.lc-badge--purple {
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--purple);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.lc-badge--red {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Stats Grid */
+.lc-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lc-stats__row {
+  display: grid;
+  gap: 12px;
+}
+
+.lc-stats__row--2col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.lc-stats__row--3col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.lc-stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+
+.lc-stat__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.lc-stat__value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.lc-stat__value--cyan {
+  color: var(--cyan);
+}
+
+/* ===== Right Panel — Event Log ===== */
+.lc-panel--right {
+  display: flex;
+  flex-direction: column;
+  max-height: 500px;
+}
+
+.lc-events {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 19px;
+  /* Center the log cards within the Event Log panel for better visual alignment */
+  align-items: center;
+}
+
+.lc-event {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  width: 100%;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.lc-event__type {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 4px;
+}
+
+.lc-event__details {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.lc-event__time {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Empty State */
+.lc-empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1100px) {
+  .lifecycle-layout {
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: auto auto;
+  }
+  
+  .lc-panel--right {
+    grid-column: 1 / -1;
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .lifecycle-layout {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  
+  .lc-stats__row--3col {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .lc-progress {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  
+  .lc-progress__connector {
+    display: none;
+  }
+}

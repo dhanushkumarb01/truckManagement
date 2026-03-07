@@ -68,6 +68,7 @@ function FleetOverview({ onSelectTruck }) {
                                     <th>Visits</th>
                                     <th>Tare (kg)</th>
                                     <th>Gross (kg)</th>
+                                    <th>Net (kg)</th>
                                     <th>Last Updated</th>
                                 </tr>
                             </thead>
@@ -84,10 +85,11 @@ function FleetOverview({ onSelectTruck }) {
                                                 {s.state}
                                             </span>
                                         </td>
-                                        <td>{s.movementLock ? '🔒' : '—'}</td>
-                                        <td>{s.visitCount}</td>
+                                        <td>{s.movementLocked ? '🔒' : '—'}</td>
+                                        <td>{s.dockVisits}</td>
                                         <td>{s.tareWeight != null ? s.tareWeight : '—'}</td>
                                         <td>{s.grossWeight != null ? s.grossWeight : '—'}</td>
+                                        <td>{s.netWeight != null ? s.netWeight : '—'}</td>
                                         <td className="fleet-time">{formatTime(s.updatedAt)}</td>
                                     </tr>
                                 ))}

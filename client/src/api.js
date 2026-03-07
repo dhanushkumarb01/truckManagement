@@ -1,7 +1,6 @@
-// Use relative path in development (Vite proxy), absolute URL in production
-const API_BASE = import.meta.env.PROD 
-    ? 'https://truckmanagement-r1vo.onrender.com/api' 
-    : '/api';
+// Use environment variable or fallback to relative path (Vite proxy)
+// In production: Set VITE_API_BASE_URL in .env.production
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 /**
  * Generic fetch wrapper with error handling.
@@ -22,6 +21,19 @@ async function request(url, options = {}) {
             message: 'Backend connection failed. Please ensure the server is running.',
         };
     }
+}
+
+// ============ DEMO MOVE MODE ============
+
+/**
+ * POST /api/location
+ * Send a GPS location update (used by Demo Move Mode).
+ */
+export function sendLocation(data) {
+    return request('/location', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
 }
 
 export function startSession(truckId) {
@@ -86,6 +98,16 @@ export function getGpsEvents() {
     return request('/events');
 }
 
+/**
+ * DELETE /api/events
+ * Permanently delete all event logs.
+ */
+export function deleteAllEvents() {
+    return request('/events', {
+        method: 'DELETE',
+    });
+}
+
 // ============ ZONE MANAGEMENT API ============
 
 /**
@@ -144,6 +166,16 @@ export function getRecentTransitions(limit = 100) {
     return request(`/zones/transitions/recent?limit=${limit}`);
 }
 
+/**
+ * DELETE /api/zones/transitions
+ * Permanently delete all zone transition logs.
+ */
+export function deleteZoneTransitions() {
+    return request('/zones/transitions', {
+        method: 'DELETE',
+    });
+}
+
 // ============ ALERTS API ============
 
 /**
@@ -152,6 +184,38 @@ export function getRecentTransitions(limit = 100) {
  */
 export function getDashboardAlerts(limit = 20) {
     return request(`/alerts/dashboard?limit=${limit}`);
+}
+
+/**
+ * Generic alerts getter - routes to appropriate endpoint based on type.
+ * Used by dashboard panels.
+ */
+export async function getAlerts(options = {}) {
+    const { type, limit = 50 } = options;
+    
+    // For zone transitions, use the transitions endpoint
+    if (type === 'zone_transition') {
+        const res = await getRecentTransitions(limit);
+        if (res.success && Array.isArray(res.data)) {
+            // Transform to alert-like format
+            return {
+                success: true,
+                data: res.data.map(t => ({
+                    _id: t._id,
+                    type: 'zone_transition',
+                    truckId: t.truckId || t.vehicleId,
+                    fromZone: t.fromZone,
+                    toZone: t.toZone,
+                    timestamp: t.timestamp,
+                    message: `${t.truckId || t.vehicleId} moved from ${t.fromZone || 'unknown'} to ${t.toZone || 'unknown'}`
+                }))
+            };
+        }
+        return res;
+    }
+    
+    // Default: use dashboard endpoint
+    return getDashboardAlerts(limit);
 }
 
 /**
@@ -198,6 +262,36 @@ export function acknowledgeAnomalyAlert(id, data = {}) {
     return request(`/alerts/anomalies/${id}/acknowledge`, {
         method: 'POST',
         body: JSON.stringify(data),
+    });
+}
+
+/**
+ * DELETE /api/alerts/all
+ * Permanently delete all alerts (proximity + anomaly).
+ */
+export function deleteAllAlerts() {
+    return request('/alerts/all', {
+        method: 'DELETE',
+    });
+}
+
+/**
+ * DELETE /api/alerts/proximity
+ * Permanently delete all proximity alerts.
+ */
+export function deleteProximityAlerts() {
+    return request('/alerts/proximity', {
+        method: 'DELETE',
+    });
+}
+
+/**
+ * DELETE /api/alerts/anomalies
+ * Permanently delete all anomaly alerts.
+ */
+export function deleteAnomalyAlerts() {
+    return request('/alerts/anomalies', {
+        method: 'DELETE',
     });
 }
 
@@ -257,3 +351,45 @@ export function fastagEntry(data) {
     });
 }
 
+// ============ RFID SCAN API ============
+
+/**
+ * POST /api/rfid/scan
+ * Simulate RFID/FastTag scan at gate.
+ * Returns QR code for driver to scan.
+ */
+export function rfidScan(data) {
+    return request('/rfid/scan', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
+/**
+ * GET /api/rfid/status/:sessionId
+ * Check session status after QR scan.
+ */
+export function getRfidSessionStatus(sessionId) {
+    return request(`/rfid/status/${encodeURIComponent(sessionId)}`);
+}
+
+// ============ YARD CONFIGURATION API ============
+
+/**
+ * GET /api/yard-config
+ * Get yard configuration from database.
+ */
+export function getYardConfigFromServer() {
+    return request('/yard-config');
+}
+
+/**
+ * PUT /api/yard-config
+ * Update yard configuration including polygon boundary.
+ */
+export function updateYardConfig(config) {
+    return request('/yard-config', {
+        method: 'PUT',
+        body: JSON.stringify(config),
+    });
+}

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getEvents } from '../controllers/eventController.js';
+import { getEvents, deleteAllEvents } from '../controllers/eventController.js';
 import { getGpsEvents } from '../controllers/locationController.js';
 
 const router = Router();
@@ -9,6 +9,12 @@ const router = Router();
  * Returns all GPS event logs, sorted by latest first.
  */
 router.get('/', getGpsEvents);
+
+/**
+ * DELETE /api/events
+ * Delete all event logs permanently.
+ */
+router.delete('/', deleteAllEvents);
 
 /**
  * GET /api/events/:truckId

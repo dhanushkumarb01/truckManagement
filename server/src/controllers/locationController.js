@@ -1,5 +1,7 @@
 import { asyncHandler } from '../middleware/errorHandler.js';
 import GpsEvent from '../models/GpsEvent.js';
+import EventLog from '../models/EventLog.js';
+import AnomalyEvent from '../models/AnomalyEvent.js';
 
 // ============ NEW MODULE IMPORTS ============
 import { runAnomalyDetection } from '../services/anomalyDetection.js';
@@ -91,9 +93,10 @@ function validateLocationPayload(body) {
 /**
  * Validate session is active.
  * Supports both YardSession (FastTag) and TruckSession (legacy).
+ * Also validates QR expiration for TruckSession.
  * 
  * @param {string} sessionId - Session/truck identifier
- * @returns {Promise<{ valid: boolean, sessionType: string, session?: Object }>}
+ * @returns {Promise<{ valid: boolean, sessionType: string, session?: Object, expired?: boolean }>}
  */
 async function validateActiveSession(sessionId) {
     // Check YardSession first (FastTag-based)
@@ -109,6 +112,10 @@ async function validateActiveSession(sessionId) {
     });
     
     if (truckSession) {
+        // Check QR expiration
+        if (truckSession.isQrExpired && truckSession.isQrExpired()) {
+            return { valid: false, sessionType: 'LEGACY', session: truckSession, expired: true };
+        }
         return { valid: true, sessionType: 'LEGACY', session: truckSession };
     }
     
@@ -165,6 +172,17 @@ export const receiveLocation = asyncHandler(async (req, res) => {
     // This maintains backward compatibility with existing mobile flow
     const sessionValidation = await validateActiveSession(effectiveSessionId);
     if (!sessionValidation.valid) {
+        // Check if QR expired (Issue #3)
+        if (sessionValidation.expired) {
+            console.log(`⏰ QR expired for ${effectiveSessionId} - rejecting GPS`);
+            return res.status(401).json({
+                success: false,
+                data: null,
+                expired: true,
+                message: 'Session QR code has expired. Please generate a new QR code.',
+            });
+        }
+        
         console.log(`❌ No active session for ${effectiveSessionId} - rejecting GPS`);
         // HARDENED: Reject GPS if no active session (Fix #2)
         return res.status(409).json({
@@ -189,6 +207,41 @@ export const receiveLocation = asyncHandler(async (req, res) => {
             bleSignalStrength: bleSignalStrength ?? null,
             bleDeviceId: bleDeviceId ?? null,
         };
+
+        // ============ YARD BOUNDARY VALIDATION (Fix #5) ============
+        // Check if GPS point is inside yard boundary (circle or polygon)
+        const isInsideYard = YardConfig.isPointInsideBoundary(yardConfig, latitude, longitude);
+        if (!isInsideYard) {
+            console.log(`🚨 OUT_OF_YARD: Truck ${truckId} at (${latitude}, ${longitude}) is outside yard boundary`);
+            
+            // Create OUT_OF_YARD event log
+            await EventLog.create({
+                sessionId: effectiveSessionId,
+                truckId,
+                eventType: 'OUT_OF_YARD',
+                severity: 'high',
+                message: `Truck ${truckId} detected outside yard boundary at coordinates (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`,
+                metadata: {
+                    latitude,
+                    longitude,
+                    boundaryType: yardConfig.boundaryType || 'circle',
+                    timestamp: new Date(timestamp),
+                },
+            });
+            
+            // Also create AnomalyEvent for anomaly dashboard alignment
+            await AnomalyEvent.create({
+                sessionId: effectiveSessionId,
+                truckId,
+                anomalyType: 'OUT_OF_BOUNDS',
+                severity: 'HIGH',
+                latitude,
+                longitude,
+                accuracy: accuracy || null,
+                timestamp: new Date(timestamp),
+                notes: `Truck outside yard boundary at (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`,
+            });
+        }
 
         // ============ ATOMIC SESSION UPDATE (Fix #1) ============
         // Use atomic update with timestamp validation to prevent race conditions
@@ -290,6 +343,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
                 sessionId: effectiveSessionId,
                 sessionType: sessionValidation.sessionType || 'UNKNOWN',
                 currentZone: currentZone || null,
+                isInsideYard,
                 zoneTransitions: zoneResult.transitions.length > 0 
                     ? zoneResult.transitions.map(t => ({
                         type: t.transitionType,
@@ -307,6 +361,9 @@ export const receiveLocation = asyncHandler(async (req, res) => {
 
         // Add warnings if any issues detected
         const warnings = [];
+        if (!isInsideYard) {
+            warnings.push('Truck is outside yard boundary');
+        }
         if (anomalies.length > 0) {
             warnings.push(`${anomalies.length} anomalies detected`);
         }

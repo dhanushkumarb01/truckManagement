@@ -9,19 +9,39 @@ import { asyncHandler } from '../middleware/errorHandler.js';
 
 /**
  * Helper to shape a session document for API responses.
+ * Uses standardized field names: movementLocked, dockVisits
  */
 function formatSession(session) {
     const obj = session.toObject();
+    
+    // Calculate net weight (grossWeight - tareWeight)
+    let netWeight = null;
+    if (obj.grossWeight != null && obj.tareWeight != null) {
+        netWeight = obj.grossWeight - obj.tareWeight;
+    }
+    
     return {
         truckId: obj.truckId,
         state: obj.state,
         tareWeight: obj.tareWeight,
         grossWeight: obj.grossWeight,
+        netWeight,
         invoiceStatus: obj.invoiceStatus,
-        movementLock: obj.movementLock,
-        visitCount: obj.visitCount,
+        // Standardized field names (frontend expects these)
+        movementLocked: obj.movementLock,
+        dockVisits: obj.visitCount,
+        // RFID/FastTag metadata
+        fastTagId: obj.fastTagId || null,
+        vehicleRegistration: obj.vehicleRegistration || null,
+        yardId: obj.yardId || null,
+        entryTimestamp: obj.entryTimestamp || obj.createdAt,
+        startedBy: obj.startedBy || 'MANUAL',
+        // QR expiration fields
+        qrCreatedAt: obj.qrCreatedAt,
+        qrExpiresAt: obj.qrExpiresAt,
         createdAt: obj.createdAt,
         updatedAt: obj.updatedAt,
+        _id: obj._id,
     };
 }
 
@@ -364,17 +384,28 @@ export const getAllSessions = asyncHandler(async (_req, res) => {
         .sort({ updatedAt: -1 })
         .lean();
 
-    const data = sessions.map((s) => ({
-        truckId: s.truckId,
-        state: s.state,
-        tareWeight: s.tareWeight,
-        grossWeight: s.grossWeight,
-        invoiceStatus: s.invoiceStatus,
-        movementLock: s.movementLock,
-        visitCount: s.visitCount,
-        createdAt: s.createdAt,
-        updatedAt: s.updatedAt,
-    }));
+    // Use standardized field names (movementLocked, dockVisits, netWeight)
+    const data = sessions.map((s) => {
+        // Compute net weight
+        let netWeight = null;
+        if (s.grossWeight != null && s.tareWeight != null) {
+            netWeight = s.grossWeight - s.tareWeight;
+        }
+        
+        return {
+            truckId: s.truckId,
+            state: s.state,
+            tareWeight: s.tareWeight,
+            grossWeight: s.grossWeight,
+            netWeight,
+            invoiceStatus: s.invoiceStatus,
+            // Standardized field names (frontend expects these)
+            movementLocked: s.movementLock,
+            dockVisits: s.visitCount,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+        };
+    });
 
     res.json({
         success: true,

@@ -12,6 +12,8 @@ import fastagRoutes from './routes/fastagRoutes.js';
 import vehicleRoutes from './routes/vehicleRoutes.js';
 import zoneRoutes from './routes/zoneRoutes.js';
 import alertsRoutes from './routes/alertsRoutes.js';
+import rfidRoutes from './routes/rfidRoutes.js';
+import yardConfigRoutes from './routes/yardConfigRoutes.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -43,7 +45,19 @@ app.use(
 // --- Body parser ---
 app.use(express.json());
 
-// --- Routes ---
+// --- API v1 Routes (versioned - recommended for new clients) ---
+app.use('/api/v1/session', sessionRoutes);
+app.use('/api/v1/events', eventRoutes);
+app.use('/api/v1/location', locationRoutes);
+app.get('/api/v1/sessions', getAllSessions);
+app.use('/api/v1/fastag', fastagRoutes);
+app.use('/api/v1/vehicles', vehicleRoutes);
+app.use('/api/v1/zones', zoneRoutes);
+app.use('/api/v1/alerts', alertsRoutes);
+app.use('/api/v1/rfid', rfidRoutes);
+app.use('/api/v1/yard-config', yardConfigRoutes);
+
+// --- Legacy Routes (backward compatibility - will be deprecated) ---
 app.use('/api/session', sessionRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/location', locationRoutes);
@@ -54,10 +68,15 @@ app.use('/api/fastag', fastagRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/zones', zoneRoutes);
 app.use('/api/alerts', alertsRoutes);
+app.use('/api/rfid', rfidRoutes);
+app.use('/api/yard-config', yardConfigRoutes);
 
 // --- Health check ---
 app.get('/api/health', (_req, res) => {
     res.json({ success: true, data: null, message: 'Server is running' });
+});
+app.get('/api/v1/health', (_req, res) => {
+    res.json({ success: true, data: null, message: 'API v1 is running', version: '1.0.0' });
 });
 
 // --- Global error handler ---

@@ -22,6 +22,9 @@ import {
     getAnomalyStats,
     acknowledgeAnomalyAlert,
     acknowledgeBatch,
+    deleteProximityAlerts,
+    deleteAnomalyAlerts,
+    deleteAllAlerts,
 } from '../controllers/alertsController.js';
 
 const router = Router();
@@ -41,5 +44,10 @@ router.post('/anomalies/:id/acknowledge', acknowledgeAnomalyAlert);
 
 // Batch
 router.post('/acknowledge-batch', acknowledgeBatch);
+
+// Delete
+router.delete('/proximity', deleteProximityAlerts);
+router.delete('/anomalies', deleteAnomalyAlerts);
+router.delete('/all', deleteAllAlerts);
 
 export default router;

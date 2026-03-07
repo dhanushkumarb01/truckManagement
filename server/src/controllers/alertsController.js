@@ -7,6 +7,7 @@
 import { asyncHandler } from '../middleware/errorHandler.js';
 import ProximityEvent from '../models/ProximityEvent.js';
 import AnomalyEvent from '../models/AnomalyEvent.js';
+import EventLog from '../models/EventLog.js';
 
 // ============ PROXIMITY ALERTS ============
 
@@ -222,8 +223,11 @@ export const getDashboardAlerts = asyncHandler(async (req, res) => {
     const { limit } = req.query;
     const alertLimit = parseInt(limit) || 20;
     
+    // Alert event types from EventLog
+    const alertEventTypes = ['OUT_OF_YARD', 'ZONE_ANOMALY', 'SPEED_VIOLATION', 'GEOFENCE_VIOLATION'];
+    
     // Get recent unacknowledged alerts of each type
-    const [proximityAlerts, anomalyAlerts] = await Promise.all([
+    const [proximityAlerts, anomalyAlerts, eventLogAlerts] = await Promise.all([
         ProximityEvent.find({ acknowledged: false })
             .sort({ timestamp: -1 })
             .limit(alertLimit)
@@ -232,18 +236,42 @@ export const getDashboardAlerts = asyncHandler(async (req, res) => {
             .sort({ timestamp: -1 })
             .limit(alertLimit)
             .lean(),
+        EventLog.find({ 
+            acknowledged: false,
+            eventType: { $in: alertEventTypes },
+        })
+            .sort({ timestamp: -1 })
+            .limit(alertLimit)
+            .lean(),
     ]);
     
     // Get counts
-    const [proximityCount, anomalyCount] = await Promise.all([
+    const [proximityCount, anomalyCount, eventLogCount] = await Promise.all([
         ProximityEvent.countDocuments({ acknowledged: false }),
         AnomalyEvent.countDocuments({ acknowledged: false, autoResolved: false }),
+        EventLog.countDocuments({ 
+            acknowledged: false,
+            eventType: { $in: alertEventTypes },
+        }),
     ]);
     
     // Merge and sort by timestamp
+    // Normalize EventLog alerts to have consistent fields
+    const normalizedEventLogAlerts = eventLogAlerts.map(a => ({
+        ...a,
+        alertCategory: 'SYSTEM',
+        // Map eventType to alertType for consistent frontend rendering
+        alertType: a.eventType,
+        violationType: a.eventType,
+        anomalyType: a.eventType,
+        // Ensure severity is uppercase
+        severity: (a.severity || 'medium').toUpperCase(),
+    }));
+    
     const allAlerts = [
         ...proximityAlerts.map(a => ({ ...a, alertCategory: 'PROXIMITY' })),
         ...anomalyAlerts.map(a => ({ ...a, alertCategory: 'ANOMALY' })),
+        ...normalizedEventLogAlerts,
     ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
      .slice(0, alertLimit);
     
@@ -254,7 +282,8 @@ export const getDashboardAlerts = asyncHandler(async (req, res) => {
             counts: {
                 proximity: proximityCount,
                 anomaly: anomalyCount,
-                total: proximityCount + anomalyCount,
+                system: eventLogCount,
+                total: proximityCount + anomalyCount + eventLogCount,
             },
         },
         message: 'Dashboard alerts retrieved',
@@ -276,7 +305,14 @@ export const acknowledgeBatch = asyncHandler(async (req, res) => {
         });
     }
     
-    const Model = category === 'PROXIMITY' ? ProximityEvent : AnomalyEvent;
+    let Model;
+    if (category === 'PROXIMITY') {
+        Model = ProximityEvent;
+    } else if (category === 'SYSTEM') {
+        Model = EventLog;
+    } else {
+        Model = AnomalyEvent;
+    }
     
     const result = await Model.updateMany(
         { _id: { $in: alertIds } },
@@ -293,5 +329,58 @@ export const acknowledgeBatch = asyncHandler(async (req, res) => {
             modifiedCount: result.modifiedCount,
         },
         message: `Acknowledged ${result.modifiedCount} alerts`,
+    });
+});
+
+// ============ DELETE ALERTS ============
+
+/**
+ * DELETE /api/alerts/proximity
+ * Delete all proximity alerts.
+ */
+export const deleteProximityAlerts = asyncHandler(async (req, res) => {
+    const result = await ProximityEvent.deleteMany({});
+    
+    res.status(200).json({
+        success: true,
+        data: { deletedCount: result.deletedCount },
+        message: `Permanently deleted ${result.deletedCount} proximity alerts`,
+    });
+});
+
+/**
+ * DELETE /api/alerts/anomalies
+ * Delete all anomaly alerts.
+ */
+export const deleteAnomalyAlerts = asyncHandler(async (req, res) => {
+    const result = await AnomalyEvent.deleteMany({});
+    
+    res.status(200).json({
+        success: true,
+        data: { deletedCount: result.deletedCount },
+        message: `Permanently deleted ${result.deletedCount} anomaly alerts`,
+    });
+});
+
+/**
+ * DELETE /api/alerts/all
+ * Delete all alerts (proximity + anomaly).
+ */
+export const deleteAllAlerts = asyncHandler(async (req, res) => {
+    const [proximityResult, anomalyResult] = await Promise.all([
+        ProximityEvent.deleteMany({}),
+        AnomalyEvent.deleteMany({}),
+    ]);
+    
+    const totalDeleted = proximityResult.deletedCount + anomalyResult.deletedCount;
+    
+    res.status(200).json({
+        success: true,
+        data: {
+            proximity: proximityResult.deletedCount,
+            anomaly: anomalyResult.deletedCount,
+            total: totalDeleted,
+        },
+        message: `Permanently deleted ${totalDeleted} alerts`,
     });
 });

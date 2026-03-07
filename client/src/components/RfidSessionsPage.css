@@ -1,0 +1,464 @@
+/**
+ * RfidSessionsPage.css
+ * Styles for the RFID Sessions page
+ */
+
+.rfid-page {
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: calc(100vh - 60px);
+}
+
+.rfid-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.rfid-page-title h1 {
+    margin: 0 0 4px 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.rfid-page-title p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.refresh-btn {
+    padding: 10px 16px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Error */
+.rfid-error {
+    padding: 12px 16px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: #ef4444;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+/* Stats Bar */
+.rfid-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-item {
+    flex: 1;
+    padding: 16px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.stat-item.waiting .stat-value {
+    color: #f59e0b;
+}
+
+.stat-item.expired .stat-value {
+    color: #ef4444;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Table Container */
+.rfid-table-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.rfid-table-container h2 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.rfid-table-container.history {
+    opacity: 0.8;
+}
+
+/* Loading & Empty */
+.rfid-loading {
+    padding: 40px;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.rfid-empty {
+    padding: 60px 20px;
+    text-align: center;
+}
+
+.rfid-empty .empty-icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+}
+
+.rfid-empty p {
+    margin: 0;
+    font-size: 1.1rem;
+    color: var(--text);
+}
+
+.rfid-empty span {
+    display: block;
+    margin-top: 8px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Table */
+.rfid-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.rfid-table th,
+.rfid-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.rfid-table th {
+    background: var(--surface-alt);
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.rfid-table tbody tr:hover {
+    background: var(--surface-alt);
+}
+
+.rfid-table .truck-id {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.rfid-table .fastag-id {
+    font-family: monospace;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.rfid-table .session-id.mono {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+}
+
+.rfid-table .scan-time {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.rfid-table .status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: white;
+    white-space: nowrap;
+}
+
+.rfid-table .qr-status {
+    font-size: 0.85rem;
+}
+
+.qr-valid {
+    color: #22c55e;
+}
+
+.qr-expired {
+    color: #ef4444;
+}
+
+.view-qr-btn {
+    padding: 6px 12px;
+    background: var(--primary);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.view-qr-btn:hover {
+    background: var(--primary-dark, #2563eb);
+    transform: scale(1.02);
+}
+
+.history-row {
+    opacity: 0.7;
+}
+
+/* QR Modal */
+.qr-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.qr-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+.qr-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+}
+
+.qr-modal-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.close-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--surface-alt);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--text-muted);
+    transition: all 0.2s;
+}
+
+.close-btn:hover {
+    background: var(--border);
+    color: var(--text);
+}
+
+.qr-modal-body {
+    padding: 24px;
+}
+
+/* Session Info */
+.qr-session-info {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.qr-session-info .info-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--surface-alt);
+    border-radius: 8px;
+}
+
+.qr-session-info .label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.qr-session-info .value {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.qr-session-info .value.mono {
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}
+
+/* QR Display */
+.qr-display {
+    text-align: center;
+    padding: 20px;
+    background: var(--surface-alt);
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.qr-code-placeholder {
+    margin-bottom: 16px;
+}
+
+.qr-code-box {
+    width: 150px;
+    height: 150px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 4px solid var(--primary);
+}
+
+.qr-text {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #333;
+}
+
+.qr-sub {
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.qr-timer {
+    margin-bottom: 12px;
+}
+
+.timer-label {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-right: 8px;
+}
+
+.timer-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #22c55e;
+    font-family: monospace;
+}
+
+.timer-value.warning {
+    color: #ef4444;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.qr-instruction {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+/* Expired Notice */
+.qr-expired-notice {
+    padding: 30px;
+}
+
+.qr-expired-notice .expired-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.qr-expired-notice h4 {
+    margin: 0 0 8px 0;
+    color: #ef4444;
+    font-size: 1.2rem;
+}
+
+.qr-expired-notice p {
+    margin: 0;
+    color: var(--text-muted);
+}
+
+/* Status Display */
+.qr-status-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.qr-status-display .label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.status-badge.large {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .rfid-page {
+        padding: 16px;
+    }
+    
+    .rfid-stats {
+        flex-direction: column;
+    }
+    
+    .rfid-table {
+        font-size: 0.85rem;
+    }
+    
+    .rfid-table th,
+    .rfid-table td {
+        padding: 10px 12px;
+    }
+    
+    .qr-modal {
+        width: 95%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+}

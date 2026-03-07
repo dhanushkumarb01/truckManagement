@@ -18,3 +18,17 @@ export const getEvents = asyncHandler(async (req, res) => {
         message: `${events.length} event(s) found`,
     });
 });
+
+/**
+ * DELETE /api/events
+ * Delete all event logs (permanent).
+ */
+export const deleteAllEvents = asyncHandler(async (req, res) => {
+    const result = await EventLog.deleteMany({});
+    
+    res.status(200).json({
+        success: true,
+        data: { deletedCount: result.deletedCount },
+        message: `Permanently deleted ${result.deletedCount} events`,
+    });
+});

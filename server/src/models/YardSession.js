@@ -44,6 +44,11 @@ const yardSessionSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+        // Exit tracking (Fix #4)
+        exitGate: {
+            type: String,
+            default: null,
+        },
         
         // ============ GPS CONCURRENCY FIELDS ============
         // Last GPS timestamp for atomic update validation
@@ -275,7 +280,7 @@ yardSessionSchema.statics.checkAndResetTransitionCount = async function(sessionI
 };
 
 /**
- * Static: Close session
+ * Static: Close session by sessionId
  */
 yardSessionSchema.statics.closeSession = function(sessionId) {
     return this.findOneAndUpdate(
@@ -289,6 +294,38 @@ yardSessionSchema.statics.closeSession = function(sessionId) {
         { new: true }
     );
 };
+
+/**
+ * Instance method: Close session with options (Fix #4)
+ * Used by fastagExit for proper exit tracking
+ */
+yardSessionSchema.methods.closeSession = async function(options = {}) {
+    const { exitTimestamp, exitGate } = options;
+    
+    this.sessionStatus = 'CLOSED';
+    this.endTime = exitTimestamp || new Date();
+    
+    if (exitGate) {
+        this.exitGate = exitGate;
+    }
+    
+    await this.save();
+    return this;
+};
+
+/**
+ * Virtual: Calculate total duration in minutes (Fix #4)
+ */
+yardSessionSchema.virtual('totalDuration').get(function() {
+    if (!this.startTime) return 0;
+    const end = this.endTime || new Date();
+    const durationMs = end.getTime() - this.startTime.getTime();
+    return Math.round(durationMs / 60000); // Convert to minutes
+});
+
+// Ensure virtuals are included in JSON/Object output
+yardSessionSchema.set('toJSON', { virtuals: true });
+yardSessionSchema.set('toObject', { virtuals: true });
 
 const YardSession = mongoose.model('YardSession', yardSessionSchema);
 

@@ -309,11 +309,28 @@ export const getRecentTransitions = asyncHandler(async (req, res) => {
 export const getCurrentTruckZones = asyncHandler(async (req, res) => {
     const { getAllTruckZones } = await import('../services/zoneDetection.js');
     
-    const truckZones = getAllTruckZones();
+    // Fix #5: await the async function
+    const truckZones = await getAllTruckZones();
     
     res.status(200).json({
         success: true,
         data: truckZones,
         message: 'Current truck zones retrieved',
+    });
+});
+
+/**
+ * DELETE /api/zones/transitions
+ * Delete all zone transitions (permanent).
+ */
+export const deleteAllTransitions = asyncHandler(async (req, res) => {
+    const ZoneTransition = (await import('../models/ZoneTransition.js')).default;
+    
+    const result = await ZoneTransition.deleteMany({});
+    
+    res.status(200).json({
+        success: true,
+        data: { deletedCount: result.deletedCount },
+        message: `Permanently deleted ${result.deletedCount} zone transitions`,
     });
 });

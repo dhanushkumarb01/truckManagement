@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { updateYardConfig as updateYardConfigApi } from '../api';
 
 const YARD_CONFIG_KEY = 'yardConfig';
 
@@ -60,6 +61,7 @@ function YardConfigPanel({ onConfigSaved, currentConfig }) {
     ]);
     const [errors, setErrors] = useState({});
     const [successMessage, setSuccessMessage] = useState('');
+    const [saving, setSaving] = useState(false);
 
     // Load existing config on mount
     useEffect(() => {
@@ -106,8 +108,10 @@ function YardConfigPanel({ onConfigSaved, currentConfig }) {
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!validate()) return;
+        
+        setSaving(true);
 
         const config = {
             coordinates: coords.map(coord => [
@@ -116,8 +120,32 @@ function YardConfigPanel({ onConfigSaved, currentConfig }) {
             ])
         };
 
+        // Save to localStorage for immediate UI use
         saveYardConfig(config);
-        setSuccessMessage('Yard configuration saved!');
+        
+        // Also save to database for backend validation
+        try {
+            const boundaryPolygon = coords.map(coord => ({
+                lat: parseFloat(coord.lat),
+                lng: parseFloat(coord.lng)
+            }));
+            
+            const result = await updateYardConfigApi({
+                boundaryType: 'polygon',
+                boundaryPolygon,
+            });
+            
+            if (result.success) {
+                setSuccessMessage('Yard configuration saved to database!');
+            } else {
+                setSuccessMessage('Saved locally (database sync failed: ' + result.message + ')');
+            }
+        } catch (err) {
+            console.error('Failed to save yard config to database:', err);
+            setSuccessMessage('Saved locally (database sync failed)');
+        }
+        
+        setSaving(false);
         
         if (onConfigSaved) {
             onConfigSaved(config);
@@ -188,12 +216,14 @@ function YardConfigPanel({ onConfigSaved, currentConfig }) {
                     <button
                         className="btn btn-primary"
                         onClick={handleSave}
+                        disabled={saving}
                     >
-                        💾 Save Configuration
+                        {saving ? '⏳ Saving...' : '💾 Save Configuration'}
                     </button>
                     <button
                         className="btn btn-danger"
                         onClick={handleClear}
+                        disabled={saving}
                         style={{ marginTop: 8 }}
                     >
                         🗑️ Clear & Reset

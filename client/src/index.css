@@ -87,6 +87,18 @@ body {
   margin: 0 auto;
 }
 
+/* Lifecycle View Container */
+.lifecycle-view {
+  flex: 1;
+  /* Full-width page container for the Truck Lifecycle view.
+     The internal `.lifecycle-layout` already provides responsive padding/gaps. */
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+
 /* ===== Cards ===== */
 .card {
   background: var(--bg-card);
@@ -351,6 +363,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.badges-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: -8px;
 }
 
 .status-row {
@@ -633,6 +652,146 @@ body {
 
 .empty-state p {
   font-size: 0.9rem;
+}
+
+/* ===== Truck Lifecycle Panel ===== */
+.truck-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.truck-select-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.truck-select-item:hover {
+  border-color: var(--blue);
+  transform: translateX(4px);
+}
+
+.truck-select-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.truck-select-id {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.truck-select-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.truck-select-arrow {
+  color: var(--text-dim);
+  font-size: 1.1rem;
+}
+
+/* Truck selector dropdown */
+.truck-selector {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.truck-selector:hover,
+.truck-selector:focus {
+  border-color: var(--blue);
+  outline: none;
+}
+
+.truck-selector option {
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px;
+}
+
+/* Data Grid for weight info */
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.data-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+
+.data-item.highlight {
+  border-color: var(--green);
+  background: var(--green-bg);
+}
+
+.data-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.data-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: block;
+}
+
+/* Status details row */
+.status-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-details .status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.status-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.status-value {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.status-value.mono {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.85rem;
 }
 
 /* ===== Tooltip ===== */
@@ -1272,6 +1431,7 @@ body {
     opacity: 0;
     transform: translateY(-8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1387,6 +1547,10 @@ body {
 }
 
 /* Leaflet Draw Override for Dark Theme */
+.leaflet-container {
+  background: var(--bg) !important;
+}
+
 .leaflet-draw-toolbar a {
   background-color: var(--bg-card) !important;
   border-color: var(--border) !important;
@@ -1434,9 +1598,12 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.7;
   }
@@ -1506,9 +1673,12 @@ body {
 }
 
 @keyframes flash {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -1591,4 +1761,130 @@ body {
 .zone-draw-panel::-webkit-scrollbar-thumb:hover,
 .vehicle-panel::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* ===== Demo Move Mode ===== */
+.demo-mode-bar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.25s ease;
+}
+
+.demo-mode-bar.demo-active {
+  border-color: var(--red);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.15);
+}
+
+.demo-toggle-btn {
+  padding: 6px 16px !important;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+}
+
+.demo-truck-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+  min-width: 160px;
+}
+
+.demo-truck-select:focus {
+  border-color: var(--blue);
+}
+
+.demo-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ============ ERROR BOUNDARY ============ */
+
+.error-boundary-fallback {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.error-boundary-content {
+  text-align: center;
+  max-width: 500px;
+  padding: 40px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.error-boundary-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+}
+
+.error-boundary-content h1 {
+  font-size: 1.5rem;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.error-boundary-message {
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.error-boundary-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-boundary-details {
+  margin-top: 24px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+}
+
+.error-boundary-details summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.error-boundary-details pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--red);
+  font-family: monospace;
+  font-size: 0.7rem;
+  max-height: 200px;
+  overflow: auto;
 }

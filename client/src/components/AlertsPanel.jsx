@@ -39,7 +39,9 @@ const ALERT_ICONS = {
 
 // Format alert type for display
 function formatAlertType(type) {
-    return type
+    // Defensive: handle undefined/null type
+    if (!type) return 'System Event';
+    return String(type)
         .replace(/_/g, ' ')
         .toLowerCase()
         .replace(/\b\w/g, c => c.toUpperCase());
@@ -146,29 +148,49 @@ function AlertsPanel({ autoRefresh = true, refreshInterval = 30000 }) {
             </div>
 
             {/* Tabs */}
-            <div className="alert-tabs" style={{
-                display: 'flex',
-                gap: '8px',
-                marginBottom: '12px',
-            }}>
-                <button
-                    className={`btn btn-sm ${activeTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setActiveTab('all')}
-                >
-                    All ({counts.total})
-                </button>
-                <button
-                    className={`btn btn-sm ${activeTab === 'proximity' ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setActiveTab('proximity')}
-                >
-                    📡 BLE ({counts.proximity})
-                </button>
-                <button
-                    className={`btn btn-sm ${activeTab === 'anomalies' ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setActiveTab('anomalies')}
-                >
-                    ⚠️ GPS ({counts.anomaly})
-                </button>
+            <div style={{ marginBottom: '12px' }}>
+                <div className="alert-tabs" style={{
+                    display: 'flex',
+                    gap: '8px',
+                    marginBottom: '8px',
+                }}>
+                    <button
+                        className={`btn btn-sm ${activeTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setActiveTab('all')}
+                    >
+                        All ({counts.total})
+                    </button>
+                    <button
+                        className={`btn btn-sm ${activeTab === 'proximity' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setActiveTab('proximity')}
+                    >
+                        📡 BLE ({counts.proximity})
+                    </button>
+                    <button
+                        className={`btn btn-sm ${activeTab === 'anomalies' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setActiveTab('anomalies')}
+                    >
+                        ⚠️ GPS ({counts.anomaly})
+                    </button>
+                </div>
+                {alerts.length > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={async () => {
+                                if (window.confirm('Permanently delete all alerts? This cannot be undone.')) {
+                                    const res = await api.deleteAllAlerts();
+                                    if (res.success) {
+                                        setAlerts([]);
+                                        setCounts({ proximity: 0, anomaly: 0, total: 0 });
+                                    }
+                                }
+                            }}
+                        >
+                            Clear Logs
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Error */}
@@ -228,10 +250,10 @@ function AlertsPanel({ autoRefresh = true, refreshInterval = 30000 }) {
                             }}>
                                 <div>
                                     <span style={{ fontSize: '16px', marginRight: '6px' }}>
-                                        {ALERT_ICONS[alert.violationType || alert.anomalyType] || '⚠️'}
+                                        {ALERT_ICONS[alert.violationType || alert.anomalyType || alert.alertType || alert.eventType] || '⚠️'}
                                     </span>
                                     <span style={{ fontWeight: '600' }}>
-                                        {formatAlertType(alert.violationType || alert.anomalyType)}
+                                        {formatAlertType(alert.violationType || alert.anomalyType || alert.alertType || alert.eventType)}
                                     </span>
                                     <span style={{
                                         marginLeft: '8px',

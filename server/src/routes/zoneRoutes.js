@@ -22,6 +22,7 @@ import {
     restoreZone,
     getRecentTransitions,
     getCurrentTruckZones,
+    deleteAllTransitions,
 } from '../controllers/zoneController.js';
 
 const router = Router();
@@ -31,6 +32,7 @@ router.post('/', createZone);
 router.get('/', getZones);
 router.get('/current', getCurrentTruckZones);
 router.get('/transitions/recent', getRecentTransitions);
+router.delete('/transitions', deleteAllTransitions);
 router.get('/:zoneId', getZone);
 router.put('/:zoneId', updateZone);
 router.delete('/:zoneId', deleteZone);

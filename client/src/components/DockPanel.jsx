@@ -6,7 +6,7 @@ function DockPanel({ session, onDock, loading }) {
     const [detectionPhase, setDetectionPhase] = useState(0); // 0=rfid, 1=camera, 2=done
 
     const state = session?.state;
-    const isLocked = session?.movementLock || session?.invoiceStatus === 'GENERATED';
+    const isLocked = session?.movementLocked || session?.invoiceStatus === 'GENERATED';
     const canDock = (state === 'TARE_DONE' || state === 'GROSS_DONE') && !isLocked;
     const isVisible = !!session && state !== 'EXITED' && state !== 'ENTRY';
 
@@ -62,9 +62,9 @@ function DockPanel({ session, onDock, loading }) {
                     </button>
                 </div>
 
-                {session?.visitCount > 0 && (
+                {session?.dockVisits > 0 && (
                     <div style={{ marginTop: 10, fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                        Dock visits: <strong>{session.visitCount}</strong>
+                        Dock visits: <strong>{session.dockVisits}</strong>
                     </div>
                 )}
             </div>

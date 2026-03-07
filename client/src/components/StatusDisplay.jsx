@@ -78,7 +78,7 @@ function StatusDisplay({ session }) {
             {/* Current State Badge */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span className={`badge ${badge.cls}`}>{badge.label}</span>
-                {session.movementLock && (
+                {session.movementLocked && (
                     <span className="badge badge-red">🔒 Movement Locked</span>
                 )}
             </div>
@@ -91,7 +91,7 @@ function StatusDisplay({ session }) {
                 </div>
                 <div className="stat-block">
                     <div className="stat-label">Dock Visits</div>
-                    <div className="stat-value">{session.visitCount}</div>
+                    <div className="stat-value">{session.dockVisits}</div>
                 </div>
             </div>
 
