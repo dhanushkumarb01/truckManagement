@@ -1,4 +1,5 @@
 import TruckSession from '../models/TruckSession.js';
+import YardSession from '../models/YardSession.js';
 import EventLog from '../models/EventLog.js';
 import {
     validateTransition,
@@ -13,13 +14,13 @@ import { asyncHandler } from '../middleware/errorHandler.js';
  */
 function formatSession(session) {
     const obj = session.toObject();
-    
+
     // Calculate net weight (grossWeight - tareWeight)
     let netWeight = null;
     if (obj.grossWeight != null && obj.tareWeight != null) {
         netWeight = obj.grossWeight - obj.tareWeight;
     }
-    
+
     return {
         truckId: obj.truckId,
         state: obj.state,
@@ -384,6 +385,19 @@ export const getAllSessions = asyncHandler(async (_req, res) => {
         .sort({ updatedAt: -1 })
         .lean();
 
+    // Change 1: Fetch YardSessions to cross-reference driverCode/deviceLinked
+    const truckIds = sessions.map(s => s.truckId);
+    const yardSessions = await YardSession.find({ truckId: { $in: truckIds } })
+        .select('truckId driverCode deviceLinked deviceId sessionStatus')
+        .lean();
+    const yardSessionMap = new Map();
+    yardSessions.forEach(ys => {
+        // Prefer active sessions for mapping
+        if (!yardSessionMap.has(ys.truckId) || ys.sessionStatus === 'ACTIVE') {
+            yardSessionMap.set(ys.truckId, ys);
+        }
+    });
+
     // Use standardized field names (movementLocked, dockVisits, netWeight)
     const data = sessions.map((s) => {
         // Compute net weight
@@ -391,19 +405,47 @@ export const getAllSessions = asyncHandler(async (_req, res) => {
         if (s.grossWeight != null && s.tareWeight != null) {
             netWeight = s.grossWeight - s.tareWeight;
         }
-        
+
+        // Change 1: Get driverCode from matching YardSession
+        const matchingYard = yardSessionMap.get(s.truckId);
+
         return {
+            // Session identifiers
+            _id: s._id,
+            sessionId: s._id.toString(), // Explicit sessionId for frontend
             truckId: s.truckId,
+
+            // RFID/FastTag metadata (for RFID Sessions page)
+            fastTagId: s.fastTagId || null,
+            vehicleRegistration: s.vehicleRegistration || s.truckId,
+            yardId: s.yardId || 'DEFAULT_YARD',
+            startedBy: s.startedBy || 'MANUAL',
+
+            // Session state
             state: s.state,
             tareWeight: s.tareWeight,
             grossWeight: s.grossWeight,
             netWeight,
             invoiceStatus: s.invoiceStatus,
+
             // Standardized field names (frontend expects these)
             movementLocked: s.movementLock,
             dockVisits: s.visitCount,
+
+            // Timestamps
+            entryTimestamp: s.entryTimestamp || s.createdAt,
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
+            exitTimestamp: s.exitTimestamp || null,
+
+            // QR code fields (for RFID Sessions page)
+            qrCreatedAt: s.qrCreatedAt || s.createdAt,
+            qrExpiresAt: s.qrExpiresAt || null,
+            driverLinked: s.driverLinked || false,
+            driverLinkedAt: s.driverLinkedAt || null,
+            // Change 1: Driver code fields (from YardSession)
+            driverCode: matchingYard?.driverCode || null,
+            deviceLinked: matchingYard?.deviceLinked || false,
         };
     });
 
@@ -411,5 +453,82 @@ export const getAllSessions = asyncHandler(async (_req, res) => {
         success: true,
         data,
         message: `${data.length} session(s) found`,
+    });
+});
+
+/**
+ * POST /api/session/link-device
+ * Links a driver's device to a session using the 6-digit driver code.
+ * Called by the driver APK after entering the code.
+ * 
+ * Body: { driverCode, deviceId }
+ */
+export const linkDevice = asyncHandler(async (req, res) => {
+    const { driverCode, deviceId } = req.body;
+
+    if (!driverCode || !deviceId) {
+        return res.status(400).json({
+            success: false,
+            data: null,
+            message: 'driverCode and deviceId are required',
+        });
+    }
+
+    // Find active YardSession by driver code
+    const yardSession = await YardSession.findByDriverCode(driverCode.trim());
+
+    if (!yardSession) {
+        return res.status(404).json({
+            success: false,
+            data: null,
+            message: 'No active session found for this driver code. Code may be invalid or expired.',
+        });
+    }
+
+    // Check if driver code has expired (20 minute validity)
+    if (yardSession.driverCodeExpiresAt && new Date() > new Date(yardSession.driverCodeExpiresAt)) {
+        return res.status(410).json({
+            success: false,
+            data: null,
+            message: 'Driver code has expired. Please request a new code from the gatekeeper.',
+        });
+    }
+
+    // Check if already linked
+    if (yardSession.deviceLinked && yardSession.deviceId) {
+        return res.status(409).json({
+            success: false,
+            data: {
+                sessionId: yardSession.sessionId,
+                vehicleNumber: yardSession.vehicleNumber,
+            },
+            message: 'This session is already linked to a device.',
+        });
+    }
+
+    // Link device to session
+    yardSession.deviceId = deviceId.trim();
+    yardSession.deviceLinked = true;
+    await yardSession.save();
+
+    // Log the linking event
+    await EventLog.create({
+        truckId: yardSession.vehicleNumber,
+        sessionId: yardSession.sessionId,
+        eventType: 'DEVICE_LINKED',
+        message: `Device ${deviceId} linked to session ${yardSession.sessionId} via driver code ${driverCode}`,
+    });
+
+    console.log(`📱 Device linked: ${deviceId} → ${yardSession.vehicleNumber} (Session: ${yardSession.sessionId})`);
+
+    res.status(200).json({
+        success: true,
+        data: {
+            sessionId: yardSession.sessionId,
+            vehicleNumber: yardSession.vehicleNumber,
+            truckId: yardSession.truckId,
+            deviceLinked: true,
+        },
+        message: 'Device successfully linked to session. GPS tracking can begin.',
     });
 });

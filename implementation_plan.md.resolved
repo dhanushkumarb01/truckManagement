@@ -1,0 +1,204 @@
+# Smart Yard Monitoring System — Implementation Plan
+
+Three scoped changes to the production system, each designed to be modular and non-breaking.
+
+---
+
+## Proposed Changes
+
+### Change 1 — Static QR + Driver Code Linking
+
+Replaces the per-session dynamic QR with a static APK-download QR and a 6-digit driver code for device linking.
+
+---
+
+#### [MODIFY] [YardSession.js](file:///c:/Users/Dhanush/internship-project2/server/src/models/YardSession.js)
+
+Add two fields to the schema:
+- `driverCode` (String, sparse index) — 6-digit numeric code
+- `deviceId` (String, default null) — linked device identifier
+- `deviceLinked` (Boolean, default false) — whether device is linked
+- Add a static method `findByDriverCode(code)` to look up active sessions by driver code
+
+---
+
+#### [MODIFY] [fastagController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/fastagController.js)
+
+In [fastagEntry](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#343-353), after creating the `YardSession`:
+- Generate a random 6-digit numeric code (e.g., `Math.floor(100000 + Math.random() * 900000).toString()`)
+- Store it in `driverCode` field
+- Include `driverCode` in the API response
+
+---
+
+#### [MODIFY] [sessionController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/sessionController.js)
+
+Add a new exported function `linkDevice`:
+- Accepts `{ driverCode, deviceId }` in the body
+- Finds active `YardSession` by `driverCode`
+- Sets `deviceId` and `deviceLinked = true` on the session
+- Returns the linked session info
+
+---
+
+#### [MODIFY] [sessionRoutes.js](file:///c:/Users/Dhanush/internship-project2/server/src/routes/sessionRoutes.js)
+
+Add route: `router.post('/link-device', linkDevice);`
+
+---
+
+#### [MODIFY] [locationController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/locationController.js)
+
+Extend [validateActiveSession](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/locationController.js#93-124) to also check by `deviceId`:
+- If `truckId` doesn't match a session by `sessionId`, try `YardSession.findOne({ deviceId: truckId, sessionStatus: 'ACTIVE' })`
+
+---
+
+#### [MODIFY] [RfidSessionsPage.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/RfidSessionsPage.jsx)
+
+- Add a **Driver Code** column to the active sessions table (after FastTag ID)
+- Replace the QR modal content to show a static QR code with instructions: "Scan to download Driver APK"
+- Display the `driverCode` prominently in the modal for the gatekeeper to read out
+
+---
+
+#### [MODIFY] [api.js](file:///c:/Users/Dhanush/internship-project2/client/src/api.js)
+
+Add `linkDevice(driverCode, deviceId)` function that calls `POST /api/session/link-device`.
+
+---
+
+### Change 2 — Super Admin Role
+
+Adds `superadmin` role with a Yard Selection page that redirects to the existing dashboard.
+
+---
+
+#### [MODIFY] [User.js](file:///c:/Users/Dhanush/internship-project2/server/src/models/User.js)
+
+Change `ROLES` array from `['admin', 'gatekeeper']` to `['superadmin', 'admin', 'gatekeeper']`.
+
+---
+
+#### [MODIFY] [roleMiddleware.js](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/roleMiddleware.js)
+
+- Update [requireAdmin](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/roleMiddleware.js#51-58) to include `superadmin`: [requireRole('admin', 'superadmin')](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/roleMiddleware.js#16-50)
+- Update [requireGatekeeperAccess](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/roleMiddleware.js#59-66) to include `superadmin`: [requireRole('admin', 'superadmin', 'gatekeeper')](file:///c:/Users/Dhanush/internship-project2/server/src/middleware/roleMiddleware.js#16-50)
+
+---
+
+#### [MODIFY] [AuthContext.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/context/AuthContext.jsx)
+
+- Add `superadmin` to all `ROUTE_PERMISSIONS` entries that `admin` has access to
+- Add new view `yards: ['superadmin']`
+- Update [getDefaultViewForRole](file:///c:/Users/Dhanush/internship-project2/client/src/context/AuthContext.jsx#178-193):
+  - `superadmin` → `'yards'` (yard selection page)
+- Add `isSuperAdmin` computed property
+
+---
+
+#### [MODIFY] [LoginPage.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/LoginPage.jsx)
+
+Add `superadmin` option to the role `<select>` with label "Super Admin" and hint "System-wide management across all yards".
+
+---
+
+#### [NEW] [YardSelectionPage.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/YardSelectionPage.jsx)
+
+New component showing:
+- Title: "Select Yard"
+- Single card: "Hyderabad Steel Yard" with location, status badges
+- Clicking the card calls `onSelectYard()` which navigates to the `map` view (existing dashboard)
+
+---
+
+#### [MODIFY] [App.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/App.jsx)
+
+- Import `YardSelectionPage`
+- Add `yards` view rendering with a callback that switches to `map` view
+- Add nav button for `yards` view (Super Admin only)
+
+---
+
+### Change 3 — Tamper Alerts Integration
+
+Ensures tamper events (DEVICE_REMOVED, BLE_DISCONNECTED, MAGNETIC_DEVICE_REMOVED, DEVICE_OFFLINE) are logged to EventLog and visible in the dashboard.
+
+---
+
+#### [MODIFY] [alertsController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/alertsController.js)
+
+Add tamper event types to `alertEventTypes` array in [getDashboardAlerts](file:///c:/Users/Dhanush/internship-project2/client/src/api.js#181-188):
+```js
+const alertEventTypes = [
+    'OUT_OF_YARD', 'ZONE_ANOMALY', 'SPEED_VIOLATION', 'GEOFENCE_VIOLATION',
+    'DEVICE_REMOVED', 'BLE_DISCONNECTED', 'MAGNETIC_DEVICE_REMOVED', 'DEVICE_OFFLINE'
+];
+```
+
+---
+
+#### [NEW] Export a new `reportTamperEvent` function in [alertsController.js](file:///c:/Users/Dhanush/internship-project2/server/src/controllers/alertsController.js)
+
+`POST /api/alerts/tamper` endpoint:
+- Accepts `{ truckId, sessionId, eventType, location, timestamp }`
+- Validates `eventType` is one of the tamper types
+- Creates an `EventLog` entry with severity `high` or `critical`
+- Returns success
+
+---
+
+#### [MODIFY] [alertsRoutes.js](file:///c:/Users/Dhanush/internship-project2/server/src/routes/alertsRoutes.js)
+
+Add route: `router.post('/tamper', reportTamperEvent);`
+
+---
+
+#### [MODIFY] [AlertsPanel.jsx](file:///c:/Users/Dhanush/internship-project2/client/src/components/AlertsPanel.jsx)
+
+Add tamper event icons to `ALERT_ICONS`:
+```js
+DEVICE_REMOVED: '🔌',
+BLE_DISCONNECTED: '📵',
+MAGNETIC_DEVICE_REMOVED: '🧲',
+DEVICE_OFFLINE: '📴',
+```
+
+---
+
+#### [MODIFY] [api.js](file:///c:/Users/Dhanush/internship-project2/client/src/api.js)
+
+Add `reportTamperEvent(data)` function that calls `POST /api/alerts/tamper`.
+
+---
+
+## Verification Plan
+
+### Automated (Build verification)
+
+1. **Backend**: `cd server && node src/app.js` — verify server starts without errors and connects to MongoDB
+2. **Frontend**: `cd client && npm run build` (or use `npx vite build` from project root) — verify no compile errors
+
+### Browser Testing
+
+1. **Super Admin login flow**:
+   - Register a new user with role `superadmin`
+   - Login → should see Yard Selection page
+   - Click "Hyderabad Steel Yard" → should redirect to Live Map dashboard
+   - Navigation should show all tabs including "Yard Selection"
+
+2. **RFID Sessions page — Driver Code column**:
+   - Login as `gatekeeper` or `admin`
+   - Navigate to RFID Sessions
+   - Verify "Driver Code" column appears in the active sessions table
+   - Click "View QR" → should show static APK download QR and the driver code prominently
+
+3. **Tamper alerts**:
+   - Use Postman/curl to `POST /api/alerts/tamper` with test tamper event data
+   - Login as `admin`, navigate to dashboard
+   - Verify tamper alert appears in AlertsPanel with correct icon and severity
+
+### Manual Verification (User)
+
+- Verify existing flows still work: admin login → map/lifecycle/fleet views, gatekeeper login → RFID sessions only
+- Verify FastTag entry still creates sessions correctly (existing functionality preserved)

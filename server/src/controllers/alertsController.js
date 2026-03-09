@@ -1,7 +1,13 @@
 /**
  * Alerts Controller
- * Handles proximity violations and anomaly alerts.
+ * Handles proximity violations, anomaly alerts, and tamper events.
  * Provides dashboard data for real-time monitoring.
+ * 
+ * Tamper Event Types:
+ * - DEVICE_REMOVED: Physical device removal detected
+ * - BLE_DISCONNECTED: Bluetooth connection lost
+ * - MAGNETIC_DEVICE_REMOVED: Magnetic sensor triggered
+ * - DEVICE_OFFLINE: Device stopped responding
  */
 
 import { asyncHandler } from '../middleware/errorHandler.js';
@@ -223,8 +229,12 @@ export const getDashboardAlerts = asyncHandler(async (req, res) => {
     const { limit } = req.query;
     const alertLimit = parseInt(limit) || 20;
     
-    // Alert event types from EventLog
-    const alertEventTypes = ['OUT_OF_YARD', 'ZONE_ANOMALY', 'SPEED_VIOLATION', 'GEOFENCE_VIOLATION'];
+    // Alert event types from EventLog (includes tamper events)
+    const alertEventTypes = [
+        'OUT_OF_YARD', 'ZONE_ANOMALY', 'SPEED_VIOLATION', 'GEOFENCE_VIOLATION',
+        // Tamper events
+        'DEVICE_REMOVED', 'BLE_DISCONNECTED', 'MAGNETIC_DEVICE_REMOVED', 'DEVICE_OFFLINE'
+    ];
     
     // Get recent unacknowledged alerts of each type
     const [proximityAlerts, anomalyAlerts, eventLogAlerts] = await Promise.all([
@@ -382,5 +392,82 @@ export const deleteAllAlerts = asyncHandler(async (req, res) => {
             total: totalDeleted,
         },
         message: `Permanently deleted ${totalDeleted} alerts`,
+    });
+});
+
+// ============ TAMPER ALERTS ============
+
+/**
+ * Valid tamper event types that can be reported
+ */
+const TAMPER_EVENT_TYPES = [
+    'DEVICE_REMOVED',
+    'BLE_DISCONNECTED', 
+    'MAGNETIC_DEVICE_REMOVED',
+    'DEVICE_OFFLINE'
+];
+
+/**
+ * POST /api/alerts/tamper
+ * Report a tamper event from the mobile device.
+ * Logs to EventLog for dashboard visibility.
+ */
+export const reportTamperEvent = asyncHandler(async (req, res) => {
+    const { vehicleNumber, eventType, deviceId, details } = req.body;
+    
+    // Validate required fields
+    if (!vehicleNumber || !eventType) {
+        return res.status(400).json({
+            success: false,
+            data: null,
+            message: 'vehicleNumber and eventType are required',
+        });
+    }
+    
+    // Validate event type
+    if (!TAMPER_EVENT_TYPES.includes(eventType)) {
+        return res.status(400).json({
+            success: false,
+            data: null,
+            message: `Invalid eventType. Must be one of: ${TAMPER_EVENT_TYPES.join(', ')}`,
+        });
+    }
+    
+    // Create event log entry
+    // const eventLog = new EventLog({
+    //     vehicleNumber,
+    //     eventType,
+    //     acknowledged: false,
+    //     severity: eventType === 'DEVICE_REMOVED' || eventType === 'MAGNETIC_DEVICE_REMOVED' 
+    //         ? 'high' 
+    //         : 'medium',
+    //     details: {
+    //         deviceId: deviceId || null,
+    //         ...details,
+    //         reportedAt: new Date().toISOString(),
+    //     },
+    // });
+    const eventLog = new EventLog({
+    truckId: vehicleNumber,
+    vehicleNumber,
+    eventType,
+    message: `Tamper detected: ${eventType} for vehicle ${vehicleNumber}`,
+    acknowledged: false,
+    severity: eventType === 'DEVICE_REMOVED' || eventType === 'MAGNETIC_DEVICE_REMOVED'
+        ? 'high'
+        : 'medium',
+    details: {
+        deviceId: deviceId || null,
+        ...details,
+        reportedAt: new Date().toISOString(),
+    }
+});
+    
+    await eventLog.save();
+    
+    res.status(201).json({
+        success: true,
+        data: eventLog,
+        message: `Tamper event ${eventType} logged for ${vehicleNumber}`,
     });
 });

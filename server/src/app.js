@@ -7,6 +7,9 @@ import eventRoutes from './routes/eventRoutes.js';
 import locationRoutes from './routes/locationRoutes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
+// ============ AUTHENTICATION ROUTES ============
+import authRoutes from './routes/authRoutes.js';
+
 // ============ NEW MODULE ROUTES ============
 import fastagRoutes from './routes/fastagRoutes.js';
 import vehicleRoutes from './routes/vehicleRoutes.js';
@@ -44,6 +47,11 @@ app.use(
 
 // --- Body parser ---
 app.use(express.json());
+
+// --- Authentication Routes ---
+// RBAC: Authentication endpoints (public - no auth required for login/register)
+app.use('/api/auth', authRoutes);
+app.use('/api/v1/auth', authRoutes);
 
 // --- API v1 Routes (versioned - recommended for new clients) ---
 app.use('/api/v1/session', sessionRoutes);

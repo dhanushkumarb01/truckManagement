@@ -192,7 +192,7 @@ export function getDashboardAlerts(limit = 20) {
  */
 export async function getAlerts(options = {}) {
     const { type, limit = 50 } = options;
-    
+
     // For zone transitions, use the transitions endpoint
     if (type === 'zone_transition') {
         const res = await getRecentTransitions(limit);
@@ -213,7 +213,7 @@ export async function getAlerts(options = {}) {
         }
         return res;
     }
-    
+
     // Default: use dashboard endpoint
     return getDashboardAlerts(limit);
 }
@@ -295,6 +295,22 @@ export function deleteAnomalyAlerts() {
     });
 }
 
+/**
+ * POST /api/alerts/tamper
+ * Report a tamper event from the mobile device.
+ * @param {Object} data - Tamper event data
+ * @param {string} data.vehicleNumber - Vehicle number
+ * @param {string} data.eventType - One of: DEVICE_REMOVED, BLE_DISCONNECTED, MAGNETIC_DEVICE_REMOVED, DEVICE_OFFLINE
+ * @param {string} [data.deviceId] - Optional device identifier
+ * @param {Object} [data.details] - Optional additional details
+ */
+export function reportTamperEvent(data) {
+    return request('/alerts/tamper', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    });
+}
+
 // ============ VEHICLE MANAGEMENT API ============
 
 /**
@@ -366,6 +382,20 @@ export function rfidScan(data) {
 }
 
 /**
+ * POST /api/session/link-device
+ * Link driver's device to session using 6-digit driver code.
+ * Called by driver APK.
+ * @param {string} driverCode - 6-digit numeric code
+ * @param {string} deviceId - Device identifier from phone
+ */
+export function linkDevice(driverCode, deviceId) {
+    return request('/session/link-device', {
+        method: 'POST',
+        body: JSON.stringify({ driverCode, deviceId }),
+    });
+}
+
+/**
  * GET /api/rfid/status/:sessionId
  * Check session status after QR scan.
  */
@@ -391,5 +421,63 @@ export function updateYardConfig(config) {
     return request('/yard-config', {
         method: 'PUT',
         body: JSON.stringify(config),
+    });
+}
+
+// ============ AUTHENTICATION API ============
+// RBAC: Authentication endpoints for login/register
+
+/**
+ * POST /api/auth/login
+ * Authenticate user and get JWT token.
+ * @param {string} email - User email
+ * @param {string} password - User password
+ */
+export function loginUser(email, password) {
+    return request('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+    });
+}
+
+/**
+ * POST /api/auth/register
+ * Register a new user.
+ * @param {Object} userData - { name, email, password, role? }
+ */
+export function registerUser(userData) {
+    return request('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+    });
+}
+
+/**
+ * GET /api/auth/me
+ * Get current authenticated user profile.
+ * Requires Authorization header.
+ * @param {string} token - JWT token
+ */
+export function getCurrentUser(token) {
+    return request('/auth/me', {
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
+    });
+}
+
+/**
+ * POST /api/auth/logout
+ * Logout user (for audit logging).
+ * @param {string} token - JWT token
+ */
+export function logoutUser(token) {
+    return request('/auth/logout', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+        },
     });
 }

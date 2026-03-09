@@ -8,6 +8,7 @@ import {
     exitSession,
     getSession,
     getAllSessions,
+    linkDevice,
 } from '../controllers/sessionController.js';
 
 const router = Router();
@@ -18,6 +19,7 @@ router.post('/dock', enterDock);
 router.post('/gross', recordGross);
 router.post('/invoice', generateInvoice);
 router.post('/exit', exitSession);
+router.post('/link-device', linkDevice); // Change 1: Driver code device linking
 router.get('/:truckId', getSession);
 
 export { getAllSessions };

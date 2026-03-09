@@ -24,11 +24,11 @@ const YARD_CONFIG_CACHE_TTL = 300000; // 5 minutes
  */
 async function getYardConfig(yardId = 'DEFAULT_YARD') {
     const now = Date.now();
-    
+
     if (yardConfigCache && (now - yardConfigCacheTime) < YARD_CONFIG_CACHE_TTL) {
         return yardConfigCache;
     }
-    
+
     try {
         yardConfigCache = await YardConfig.getConfig(yardId);
         yardConfigCacheTime = now;
@@ -104,13 +104,19 @@ async function validateActiveSession(sessionId) {
     if (yardSession) {
         return { valid: true, sessionType: 'FASTAG', session: yardSession };
     }
-    
+
+    // Change 1: Check by deviceId (driver APK sends deviceId as truckId)
+    const deviceSession = await YardSession.findByDeviceId(sessionId);
+    if (deviceSession) {
+        return { valid: true, sessionType: 'FASTAG', session: deviceSession };
+    }
+
     // Fallback to TruckSession (legacy UUID-based)
     const truckSession = await TruckSession.findOne({
         truckId: sessionId,
         state: { $ne: 'EXITED' },
     });
-    
+
     if (truckSession) {
         // Check QR expiration
         if (truckSession.isQrExpired && truckSession.isQrExpired()) {
@@ -118,7 +124,7 @@ async function validateActiveSession(sessionId) {
         }
         return { valid: true, sessionType: 'LEGACY', session: truckSession };
     }
-    
+
     return { valid: false, sessionType: null, session: null };
 }
 
@@ -141,11 +147,11 @@ export const receiveLocation = asyncHandler(async (req, res) => {
     console.log("🔥 HIT PRODUCTION BACKEND");
     console.log("Incoming Body:", req.body);
 
-    const { 
-        truckId, 
-        latitude, 
-        longitude, 
-        accuracy, 
+    const {
+        truckId,
+        latitude,
+        longitude,
+        accuracy,
         timestamp,
         // Optional new fields
         sessionId: providedSessionId,
@@ -182,7 +188,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
                 message: 'Session QR code has expired. Please generate a new QR code.',
             });
         }
-        
+
         console.log(`❌ No active session for ${effectiveSessionId} - rejecting GPS`);
         // HARDENED: Reject GPS if no active session (Fix #2)
         return res.status(409).json({
@@ -195,7 +201,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
     try {
         // Get yard config (cached)
         const yardConfig = await getYardConfig();
-        
+
         // Prepare location data object for processing
         const locationData = {
             truckId,
@@ -213,7 +219,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
         const isInsideYard = YardConfig.isPointInsideBoundary(yardConfig, latitude, longitude);
         if (!isInsideYard) {
             console.log(`🚨 OUT_OF_YARD: Truck ${truckId} at (${latitude}, ${longitude}) is outside yard boundary`);
-            
+
             // Create OUT_OF_YARD event log
             await EventLog.create({
                 sessionId: effectiveSessionId,
@@ -228,7 +234,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
                     timestamp: new Date(timestamp),
                 },
             });
-            
+
             // Also create AnomalyEvent for anomaly dashboard alignment
             await AnomalyEvent.create({
                 sessionId: effectiveSessionId,
@@ -252,7 +258,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
                 longitude,
                 timestamp,
             });
-            
+
             if (!atomicResult) {
                 // Stale packet - newer data already processed
                 console.log(`⏭️ Stale GPS packet for ${truckId} - skipping`);
@@ -270,7 +276,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
         const anomalies = await runAnomalyDetection(locationData, yardConfig);
         if (anomalies.length > 0) {
             console.log(`⚠️ Detected ${anomalies.length} anomalies for ${truckId}`);
-            
+
             // Update session anomaly count if using FastTag
             if (sessionValidation.sessionType === 'FASTAG') {
                 await YardSession.updateOne(
@@ -304,10 +310,10 @@ export const receiveLocation = asyncHandler(async (req, res) => {
         if (bleSignalStrength !== undefined && bleSignalStrength !== null) {
             const zone = await detectZone(latitude, longitude);
             proximityResult = await runProximityValidation(locationData, zone);
-            
+
             if (proximityResult.hasViolation) {
                 console.log(`📡 Proximity violation for ${truckId}`);
-                
+
                 // Update session proximity violation count if using FastTag
                 if (sessionValidation.sessionType === 'FASTAG') {
                     await YardSession.updateOne(
@@ -329,7 +335,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
                 longitude,
                 proximityThreshold
             );
-            
+
             if (truckProximityAlerts.length > 0) {
                 console.log(`🚛 ${truckProximityAlerts.length} truck proximity alerts for ${truckId}`);
             }
@@ -344,15 +350,15 @@ export const receiveLocation = asyncHandler(async (req, res) => {
                 sessionType: sessionValidation.sessionType || 'UNKNOWN',
                 currentZone: currentZone || null,
                 isInsideYard,
-                zoneTransitions: zoneResult.transitions.length > 0 
+                zoneTransitions: zoneResult.transitions.length > 0
                     ? zoneResult.transitions.map(t => ({
                         type: t.transitionType,
                         zone: t.zoneName,
                     }))
                     : null,
                 anomalyCount: anomalies.length,
-                proximityStatus: proximityResult 
-                    ? proximityResult.proximityStatus 
+                proximityStatus: proximityResult
+                    ? proximityResult.proximityStatus
                     : calculateProximityStatus(bleSignalStrength),
                 truckProximityAlerts: truckProximityAlerts.length > 0 ? truckProximityAlerts : null,
             },
@@ -373,7 +379,7 @@ export const receiveLocation = asyncHandler(async (req, res) => {
         if (truckProximityAlerts.length > 0) {
             warnings.push(`${truckProximityAlerts.length} trucks nearby`);
         }
-        
+
         if (warnings.length > 0) {
             response.warnings = warnings;
         }

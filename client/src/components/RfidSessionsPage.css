@@ -258,6 +258,10 @@
     border-radius: 16px;
     width: 90%;
     max-width: 500px;
+    max-height: 90vh;
+    /* Restrict height */
+    overflow-y: auto;
+    /* Enable scrolling for tall content */
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
 }
 
@@ -388,8 +392,15 @@
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 .qr-instruction {
@@ -442,20 +453,20 @@
     .rfid-page {
         padding: 16px;
     }
-    
+
     .rfid-stats {
         flex-direction: column;
     }
-    
+
     .rfid-table {
         font-size: 0.85rem;
     }
-    
+
     .rfid-table th,
     .rfid-table td {
         padding: 10px 12px;
     }
-    
+
     .qr-modal {
         width: 95%;
         max-height: 90vh;

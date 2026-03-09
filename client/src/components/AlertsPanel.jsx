@@ -35,6 +35,11 @@ const ALERT_ICONS = {
     TIMESTAMP_ANOMALY: '🕐',
     DUPLICATE_LOCATION: '📌',
     STATIONARY_TIMEOUT: '⏸️',
+    // Tamper events (from mobile device)
+    DEVICE_REMOVED: '🔌',
+    BLE_DISCONNECTED: '📵',
+    MAGNETIC_DEVICE_REMOVED: '🧲',
+    DEVICE_OFFLINE: '📴',
 };
 
 // Format alert type for display

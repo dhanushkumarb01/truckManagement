@@ -49,7 +49,7 @@ const yardSessionSchema = new mongoose.Schema(
             type: String,
             default: null,
         },
-        
+
         // ============ GPS CONCURRENCY FIELDS ============
         // Last GPS timestamp for atomic update validation
         lastGpsTimestamp: {
@@ -76,7 +76,7 @@ const yardSessionSchema = new mongoose.Schema(
                 default: [0, 0],
             },
         },
-        
+
         // ============ ZONE TRACKING (DB-BACKED) ============
         // Replaces in-memory truckCurrentZones Map
         currentZoneId: {
@@ -104,7 +104,7 @@ const yardSessionSchema = new mongoose.Schema(
             type: Date,
             default: Date.now,
         },
-        
+
         // ============ COUNTERS ============
         anomalyCount: {
             type: Number,
@@ -118,14 +118,39 @@ const yardSessionSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
-        
+
+        // ============ DRIVER CODE LINKING ============
+        // 6-digit numeric code for driver APK linking (Change 1)
+        driverCode: {
+            type: String,
+            sparse: true,
+            index: true,
+        },
+        // Driver code expiration time (valid for 20 minutes)
+        driverCodeExpiresAt: {
+            type: Date,
+            default: null,
+        },
+        // Device ID from driver's phone (set after link-device call)
+        deviceId: {
+            type: String,
+            default: null,
+            sparse: true,
+            index: true,
+        },
+        // Whether a device has been linked to this session
+        deviceLinked: {
+            type: Boolean,
+            default: false,
+        },
+
         // Links to existing TruckSession for workflow compatibility
         truckSessionId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'TruckSession',
         },
     },
-    { 
+    {
         timestamps: true,
         // Enable optimistic concurrency via __v field
         optimisticConcurrency: true,
@@ -141,7 +166,7 @@ yardSessionSchema.index({ lastLocation: '2dsphere' });
 /**
  * Static: Find active session by sessionId or truckId
  */
-yardSessionSchema.statics.findActiveSession = function(identifier) {
+yardSessionSchema.statics.findActiveSession = function (identifier) {
     return this.findOne({
         $or: [
             { sessionId: identifier },
@@ -154,9 +179,30 @@ yardSessionSchema.statics.findActiveSession = function(identifier) {
 /**
  * Static: Find active session by vehicle
  */
-yardSessionSchema.statics.findActiveByVehicle = function(vehicleNumber) {
+yardSessionSchema.statics.findActiveByVehicle = function (vehicleNumber) {
     return this.findOne({
         vehicleNumber,
+        sessionStatus: 'ACTIVE',
+    });
+};
+
+/**
+ * Static: Find active session by driverCode (Change 1)
+ */
+yardSessionSchema.statics.findByDriverCode = function (driverCode) {
+    return this.findOne({
+        driverCode,
+        sessionStatus: 'ACTIVE',
+    });
+};
+
+/**
+ * Static: Find active session by deviceId (Change 1)
+ */
+yardSessionSchema.statics.findByDeviceId = function (deviceId) {
+    return this.findOne({
+        deviceId,
+        deviceLinked: true,
         sessionStatus: 'ACTIVE',
     });
 };
@@ -168,7 +214,7 @@ yardSessionSchema.statics.findActiveByVehicle = function(vehicleNumber) {
  * @param {number} maxDistanceMeters - Max distance in meters
  * @param {string} excludeSessionId - Session ID to exclude (self)
  */
-yardSessionSchema.statics.findNearbyActive = function(longitude, latitude, maxDistanceMeters, excludeSessionId) {
+yardSessionSchema.statics.findNearbyActive = function (longitude, latitude, maxDistanceMeters, excludeSessionId) {
     return this.find({
         sessionStatus: 'ACTIVE',
         sessionId: { $ne: excludeSessionId },
@@ -189,10 +235,10 @@ yardSessionSchema.statics.findNearbyActive = function(longitude, latitude, maxDi
  * Only updates if incoming timestamp > lastGpsTimestamp
  * Returns null if update was rejected (stale packet)
  */
-yardSessionSchema.statics.atomicGpsUpdate = async function(sessionId, gpsData) {
+yardSessionSchema.statics.atomicGpsUpdate = async function (sessionId, gpsData) {
     const { latitude, longitude, timestamp } = gpsData;
     const incomingTime = new Date(timestamp);
-    
+
     const result = await this.findOneAndUpdate(
         {
             sessionId,
@@ -217,7 +263,7 @@ yardSessionSchema.statics.atomicGpsUpdate = async function(sessionId, gpsData) {
         },
         { new: true }
     );
-    
+
     return result;
 };
 
@@ -225,10 +271,10 @@ yardSessionSchema.statics.atomicGpsUpdate = async function(sessionId, gpsData) {
  * Static: Atomic zone transition update
  * Updates zone tracking fields atomically
  */
-yardSessionSchema.statics.atomicZoneUpdate = async function(sessionId, zoneData) {
+yardSessionSchema.statics.atomicZoneUpdate = async function (sessionId, zoneData) {
     const { zoneId, zoneName, timestamp, isEnter } = zoneData;
     const now = new Date(timestamp);
-    
+
     const updateOp = isEnter
         ? {
             $set: {
@@ -248,7 +294,7 @@ yardSessionSchema.statics.atomicZoneUpdate = async function(sessionId, zoneData)
             },
             $inc: { recentTransitionCount: 1 }
         };
-    
+
     return this.findOneAndUpdate(
         { sessionId, sessionStatus: 'ACTIVE' },
         updateOp,
@@ -259,10 +305,10 @@ yardSessionSchema.statics.atomicZoneUpdate = async function(sessionId, zoneData)
 /**
  * Static: Reset transition count if window expired (60s)
  */
-yardSessionSchema.statics.checkAndResetTransitionCount = async function(sessionId) {
+yardSessionSchema.statics.checkAndResetTransitionCount = async function (sessionId) {
     const windowMs = 60000; // 60 seconds
     const cutoff = new Date(Date.now() - windowMs);
-    
+
     return this.findOneAndUpdate(
         {
             sessionId,
@@ -282,14 +328,14 @@ yardSessionSchema.statics.checkAndResetTransitionCount = async function(sessionI
 /**
  * Static: Close session by sessionId
  */
-yardSessionSchema.statics.closeSession = function(sessionId) {
+yardSessionSchema.statics.closeSession = function (sessionId) {
     return this.findOneAndUpdate(
         { sessionId, sessionStatus: 'ACTIVE' },
-        { 
-            $set: { 
-                sessionStatus: 'CLOSED', 
-                endTime: new Date() 
-            } 
+        {
+            $set: {
+                sessionStatus: 'CLOSED',
+                endTime: new Date()
+            }
         },
         { new: true }
     );
@@ -299,16 +345,16 @@ yardSessionSchema.statics.closeSession = function(sessionId) {
  * Instance method: Close session with options (Fix #4)
  * Used by fastagExit for proper exit tracking
  */
-yardSessionSchema.methods.closeSession = async function(options = {}) {
+yardSessionSchema.methods.closeSession = async function (options = {}) {
     const { exitTimestamp, exitGate } = options;
-    
+
     this.sessionStatus = 'CLOSED';
     this.endTime = exitTimestamp || new Date();
-    
+
     if (exitGate) {
         this.exitGate = exitGate;
     }
-    
+
     await this.save();
     return this;
 };
@@ -316,7 +362,7 @@ yardSessionSchema.methods.closeSession = async function(options = {}) {
 /**
  * Virtual: Calculate total duration in minutes (Fix #4)
  */
-yardSessionSchema.virtual('totalDuration').get(function() {
+yardSessionSchema.virtual('totalDuration').get(function () {
     if (!this.startTime) return 0;
     const end = this.endTime || new Date();
     const durationMs = end.getTime() - this.startTime.getTime();

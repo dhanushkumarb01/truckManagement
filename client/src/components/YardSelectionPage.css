@@ -1,0 +1,198 @@
+/**
+ * YardSelectionPage Styles
+ */
+
+.yard-selection-page {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+    min-height: calc(100vh - 80px);
+}
+
+.yard-selection-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.yard-selection-header h1 {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    color: #e2e8f0;
+}
+
+.yard-selection-header p {
+    color: #94a3b8;
+    font-size: 1rem;
+}
+
+.yards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 1.5rem;
+}
+
+.yard-card {
+    background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 12px;
+    border: 1px solid #334155;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.yard-card:hover {
+    transform: translateY(-4px);
+    border-color: #3b82f6;
+    box-shadow: 0 8px 25px rgba(59, 130, 246, 0.2);
+}
+
+.yard-card.active {
+    border-left: 4px solid #22c55e;
+}
+
+.yard-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    background: rgba(30, 41, 59, 0.5);
+    border-bottom: 1px solid #334155;
+}
+
+.yard-card-header h2 {
+    font-size: 1.25rem;
+    color: #f1f5f9;
+    margin: 0;
+}
+
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.status-badge.active {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.status-badge.offline {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.yard-card-body {
+    padding: 1.5rem;
+}
+
+.yard-location {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #94a3b8;
+    margin-bottom: 1.25rem;
+    font-size: 0.9rem;
+}
+
+.yard-location .icon {
+    font-size: 1rem;
+}
+
+.yard-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.yard-stats .stat {
+    text-align: center;
+    padding: 0.75rem;
+    background: rgba(51, 65, 85, 0.3);
+    border-radius: 8px;
+}
+
+.yard-stats .stat.alert .stat-value {
+    color: #f59e0b;
+}
+
+.yard-stats .stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #3b82f6;
+}
+
+.yard-stats .stat-label {
+    display: block;
+    font-size: 0.7rem;
+    color: #64748b;
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.yard-card-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #334155;
+    background: rgba(15, 23, 42, 0.5);
+}
+
+.enter-yard-btn {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.enter-yard-btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: scale(1.02);
+}
+
+/* Add Yard Card */
+.yard-card.add-yard {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    border-style: dashed;
+    border-color: #475569;
+}
+
+.yard-card.add-yard.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.yard-card.add-yard:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.add-yard-content {
+    text-align: center;
+    color: #64748b;
+}
+
+.add-yard-content .add-icon {
+    display: block;
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+    color: #475569;
+}
+
+.add-yard-content .coming-soon {
+    display: block;
+    font-size: 0.75rem;
+    color: #475569;
+    margin-top: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}

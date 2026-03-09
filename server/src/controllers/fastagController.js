@@ -39,7 +39,7 @@ import { v4 as uuidv4 } from 'uuid';
  */
 export const fastagEntry = asyncHandler(async (req, res) => {
     const { fastTagId, vehicleNumber, entryTimestamp, entryGate } = req.body;
-    
+
     // Validate required fields
     if (!fastTagId || typeof fastTagId !== 'string') {
         return res.status(400).json({
@@ -48,27 +48,47 @@ export const fastagEntry = asyncHandler(async (req, res) => {
             message: 'fastTagId is required and must be a string',
         });
     }
-    
-    // Validate vehicle exists in master
-    const vehicle = await Vehicle.findOne({ 
+
+    // Check if vehicle exists in master registry
+    let vehicle = await Vehicle.findOne({
         fastTagId: fastTagId.trim(),
     });
-    
+
+    // AUTO-REGISTRATION: If vehicle not found, register it automatically
     if (!vehicle) {
-        // Log unregistered FastTag attempt
-        await EventLog.create({
-            truckId: fastTagId,
-            eventType: 'FASTAG_UNREGISTERED',
-            message: `Unregistered FastTag ${fastTagId} attempted entry`,
+        // Generate vehicle number if not provided
+        const registrationNumber = vehicleNumber
+            ? vehicleNumber.trim().toUpperCase()
+            : `AUTO-${fastTagId.trim().slice(-8).toUpperCase()}`;
+
+        // Check if vehicleNumber already exists (edge case)
+        const existingByNumber = await Vehicle.findOne({ vehicleNumber: registrationNumber });
+        if (existingByNumber) {
+            return res.status(409).json({
+                success: false,
+                data: null,
+                message: `Vehicle ${registrationNumber} already registered with different FastTag.`,
+            });
+        }
+
+        // Auto-register the vehicle
+        vehicle = await Vehicle.create({
+            fastTagId: fastTagId.trim(),
+            vehicleNumber: registrationNumber,
+            vehicleType: 'TRUCK',
+            status: 'ACTIVE',
         });
-        
-        return res.status(404).json({
-            success: false,
-            data: null,
-            message: `FastTag ${fastTagId} is not registered. Please register the vehicle first.`,
+
+        // Log auto-registration
+        console.log(`[INFO] Vehicle auto-registered from FastTag scan: ${registrationNumber} (FastTag: ${fastTagId})`);
+
+        await EventLog.create({
+            truckId: registrationNumber,
+            eventType: 'VEHICLE_AUTO_REGISTERED',
+            message: `Vehicle ${registrationNumber} auto-registered from FastTag scan (${fastTagId})`,
         });
     }
-    
+
     // Check vehicle status
     if (vehicle.status !== 'ACTIVE') {
         await EventLog.create({
@@ -76,17 +96,17 @@ export const fastagEntry = asyncHandler(async (req, res) => {
             eventType: 'FASTAG_BLOCKED',
             message: `FastTag ${fastTagId} is ${vehicle.status}`,
         });
-        
+
         return res.status(403).json({
             success: false,
             data: null,
             message: `Vehicle ${vehicle.vehicleNumber} is ${vehicle.status}. Entry not allowed.`,
         });
     }
-    
+
     // Check for existing active session
     const existingSession = await YardSession.findActiveByVehicle(vehicle.vehicleNumber);
-    
+
     if (existingSession) {
         return res.status(409).json({
             success: false,
@@ -97,46 +117,66 @@ export const fastagEntry = asyncHandler(async (req, res) => {
             message: `Vehicle ${vehicle.vehicleNumber} already has an active session since ${existingSession.startTime}`,
         });
     }
-    
+
     // Create new yard session
     const sessionId = uuidv4();
     const effectiveEntryTime = entryTimestamp ? new Date(entryTimestamp) : new Date();
-    
+
+    // Generate unique 6-digit driver code (Change 1)
+    let driverCode;
+    let codeIsUnique = false;
+    while (!codeIsUnique) {
+        driverCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const existingCode = await YardSession.findByDriverCode(driverCode);
+        if (!existingCode) codeIsUnique = true;
+    }
+
+    // Driver code expires in 20 minutes
+    const driverCodeExpiresAt = new Date(Date.now() + 20 * 60 * 1000);
+
     const yardSession = await YardSession.create({
         sessionId,
+        truckId: vehicle.vehicleNumber, // Use vehicleNumber for proper tracking
         vehicleNumber: vehicle.vehicleNumber,
         fastTagId: fastTagId.trim(),
         sessionStatus: 'ACTIVE',
         startTime: effectiveEntryTime,
         entryTimestamp: effectiveEntryTime,
         entryGate: entryGate || 'MAIN_GATE',
+        driverCode, // Change 1: Store driver code
+        driverCodeExpiresAt, // Driver code valid for 20 minutes
     });
-    
+
     // Also create TruckSession for workflow compatibility
     // This ensures existing dashboard and workflow functions work
     let truckSession = await TruckSession.findOne({
-        truckId: sessionId,
+        truckId: vehicle.vehicleNumber,
         state: { $ne: 'EXITED' },
     });
-    
+
     if (!truckSession) {
         truckSession = await TruckSession.create({
-            truckId: sessionId, // Use sessionId as truckId for internal mapping
+            truckId: vehicle.vehicleNumber, // Use vehicleNumber for display
             state: 'ENTRY',
+            fastTagId: fastTagId.trim(),
+            vehicleRegistration: vehicle.vehicleNumber,
+            yardId: 'DEFAULT_YARD',
+            entryTimestamp: effectiveEntryTime,
+            startedBy: 'FASTAG',
         });
-        
+
         // Link TruckSession to YardSession
         yardSession.truckSessionId = truckSession._id;
         await yardSession.save();
     }
-    
+
     // Log entry event
     await EventLog.create({
-        truckId: sessionId,
+        truckId: vehicle.vehicleNumber,
         eventType: 'FASTAG_ENTRY',
         message: `Vehicle ${vehicle.vehicleNumber} entered via FastTag at ${entryGate || 'MAIN_GATE'}`,
     });
-    
+
     // Generate QR payload
     const qrPayload = {
         sessionId,
@@ -144,13 +184,14 @@ export const fastagEntry = asyncHandler(async (req, res) => {
         timestamp: effectiveEntryTime.toISOString(),
         version: '2.0', // Indicates FastTag-enabled flow
     };
-    
-    console.log(`✅ FastTag entry: ${vehicle.vehicleNumber} → Session ${sessionId}`);
-    
+
+    console.log(`✅ FastTag entry: ${vehicle.vehicleNumber} → Session ${sessionId} → DriverCode ${driverCode}`);
+
     res.status(201).json({
         success: true,
         data: {
             sessionId,
+            driverCode,
             qrPayload: JSON.stringify(qrPayload),
             qrPayloadObject: qrPayload,
             vehicleInfo: {
@@ -177,10 +218,10 @@ export const fastagEntry = asyncHandler(async (req, res) => {
  */
 export const fastagExit = asyncHandler(async (req, res) => {
     const { fastTagId, sessionId, exitTimestamp, exitGate } = req.body;
-    
+
     // Find the session
     let yardSession;
-    
+
     if (sessionId) {
         yardSession = await YardSession.findActiveSession(sessionId);
     } else if (fastTagId) {
@@ -195,7 +236,7 @@ export const fastagExit = asyncHandler(async (req, res) => {
             message: 'Either sessionId or fastTagId is required',
         });
     }
-    
+
     if (!yardSession) {
         return res.status(404).json({
             success: false,
@@ -203,22 +244,22 @@ export const fastagExit = asyncHandler(async (req, res) => {
             message: 'No active session found',
         });
     }
-    
+
     // Close the yard session
     await yardSession.closeSession({
         exitTimestamp: exitTimestamp ? new Date(exitTimestamp) : new Date(),
         exitGate: exitGate || 'MAIN_GATE',
     });
-    
+
     // Log exit event
     await EventLog.create({
         truckId: yardSession.sessionId,
         eventType: 'FASTAG_EXIT',
         message: `Vehicle ${yardSession.vehicleNumber} exited via ${exitGate || 'MAIN_GATE'}. Duration: ${yardSession.totalDuration} minutes`,
     });
-    
+
     console.log(`🚪 FastTag exit: ${yardSession.vehicleNumber} (${yardSession.totalDuration} min)`);
-    
+
     res.status(200).json({
         success: true,
         data: {
@@ -240,9 +281,9 @@ export const fastagExit = asyncHandler(async (req, res) => {
  */
 export const getSession = asyncHandler(async (req, res) => {
     const { sessionId } = req.params;
-    
+
     const yardSession = await YardSession.findOne({ sessionId });
-    
+
     if (!yardSession) {
         return res.status(404).json({
             success: false,
@@ -250,7 +291,7 @@ export const getSession = asyncHandler(async (req, res) => {
             message: 'Session not found',
         });
     }
-    
+
     res.status(200).json({
         success: true,
         data: yardSession,
@@ -266,7 +307,7 @@ export const getActiveSessions = asyncHandler(async (req, res) => {
     const sessions = await YardSession.find({ sessionStatus: 'ACTIVE' })
         .sort({ startTime: -1 })
         .lean();
-    
+
     res.status(200).json({
         success: true,
         data: sessions,
@@ -281,7 +322,7 @@ export const getActiveSessions = asyncHandler(async (req, res) => {
  */
 export const validateSession = asyncHandler(async (req, res) => {
     const { sessionId } = req.body;
-    
+
     if (!sessionId) {
         return res.status(400).json({
             success: false,
@@ -289,10 +330,10 @@ export const validateSession = asyncHandler(async (req, res) => {
             message: 'sessionId is required',
         });
     }
-    
+
     // Check YardSession first
     const yardSession = await YardSession.findActiveSession(sessionId);
-    
+
     if (yardSession) {
         return res.status(200).json({
             success: true,
@@ -305,13 +346,13 @@ export const validateSession = asyncHandler(async (req, res) => {
             message: 'Session is valid',
         });
     }
-    
+
     // Fallback: Check TruckSession for legacy UUID-based tracking
     const truckSession = await TruckSession.findOne({
         truckId: sessionId,
         state: { $ne: 'EXITED' },
     });
-    
+
     if (truckSession) {
         return res.status(200).json({
             success: true,
@@ -323,7 +364,7 @@ export const validateSession = asyncHandler(async (req, res) => {
             message: 'Session is valid (legacy mode)',
         });
     }
-    
+
     res.status(404).json({
         success: false,
         data: { valid: false },
