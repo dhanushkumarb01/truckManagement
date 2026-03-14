@@ -36,17 +36,25 @@
   padding: 0;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   font-family: var(--font);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   min-height: 100vh;
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
 /* ===== Layout ===== */
 .app {
+  height: 100%;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -986,6 +994,10 @@ body {
 
 /* ===== Fleet Overview ===== */
 .fleet-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px 32px;
   max-width: 1400px;
   width: 100%;
@@ -1040,6 +1052,194 @@ body {
   color: var(--text-muted);
 }
 
+/* ===== What-If Simulation ===== */
+.what-if-page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.what-if-header {
+  margin: 0 auto 24px;
+  max-width: 1400px;
+}
+
+.what-if-subtitle {
+  color: var(--text);
+  font-size: 0.95rem;
+  max-width: 780px;
+}
+
+.what-if-baseline {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.what-if-layout {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.what-if-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.what-if-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 12px;
+  align-items: center;
+}
+
+.what-if-input-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--blue);
+}
+
+.what-if-number {
+  text-align: center;
+}
+
+.what-if-help {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.what-if-run {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.what-if-results {
+  min-width: 0;
+}
+
+.what-if-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.what-if-metric {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 18px;
+  background: var(--bg);
+}
+
+.what-if-metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.what-if-metric-value {
+  margin-top: 10px;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.what-if-metric-meta {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.what-if-metric-success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.what-if-metric-warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.what-if-metric-danger {
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.what-if-gauge-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.what-if-gauge-track {
+  position: relative;
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.25) 0%, rgba(245, 158, 11, 0.25) 50%, rgba(239, 68, 68, 0.3) 100%);
+  overflow: hidden;
+}
+
+.what-if-gauge-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.what-if-gauge-fill-success {
+  background: rgba(34, 197, 94, 0.55);
+}
+
+.what-if-gauge-fill-warning {
+  background: rgba(245, 158, 11, 0.6);
+}
+
+.what-if-gauge-fill-danger {
+  background: rgba(239, 68, 68, 0.7);
+}
+
+.what-if-gauge-marker {
+  position: absolute;
+  top: -3px;
+  width: 14px;
+  height: 20px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(15, 17, 23, 0.9);
+}
+
+.what-if-gauge-caption {
+  margin-top: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.what-if-insights {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.what-if-insight-item {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 1200px) {
   .app-grid {
@@ -1049,6 +1249,18 @@ body {
 
   .fleet-container {
     padding: 16px;
+  }
+
+  .what-if-page {
+    padding: 16px;
+  }
+
+  .what-if-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .what-if-result-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1072,18 +1284,35 @@ body {
   .fleet-container {
     padding: 12px;
   }
+
+  .what-if-page {
+    padding: 12px;
+  }
+
+  .what-if-baseline {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .what-if-input-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ===== Map Page Layout ===== */
 .map-page {
   display: flex;
   flex: 1;
+  height: 100%;
+  width: 100%;
+  min-height: 0;
   overflow: hidden;
 }
 
 .map-sidebar {
   width: 340px;
   min-width: 340px;
+  height: 100%;
   background: var(--bg-card);
   border-right: 1px solid var(--border);
   display: flex;
@@ -1124,6 +1353,7 @@ body {
 
 .sidebar-content {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
 }
@@ -1131,14 +1361,24 @@ body {
 /* ===== Map Container ===== */
 .map-container {
   flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   position: relative;
   background: var(--bg);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
 }
 
 .map-canvas {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+#map {
   width: 100%;
   height: 100%;
 }
@@ -1584,6 +1824,14 @@ body {
 /* Leaflet Draw Override for Dark Theme */
 .leaflet-container {
   background: var(--bg) !important;
+}
+
+.leaflet-control {
+  z-index: 1000;
+}
+
+.map-overlay {
+  pointer-events: none;
 }
 
 .leaflet-draw-toolbar a {

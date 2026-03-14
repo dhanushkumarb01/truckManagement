@@ -14,6 +14,7 @@ import YardConfigPanel, { getYardConfig } from './YardConfigPanel';
 // ============ PANEL IMPORTS ============
 import ZoneDrawPanel from './ZoneDrawPanel';
 import AlertsPanel from './AlertsPanel';
+import DelayPredictionPanel from './DelayPredictionPanel';
 import TransitionLogsPanel from './TransitionLogsPanel';
 
 // Fix Leaflet default icon issue with Vite/Webpack bundlers
@@ -96,13 +97,14 @@ function MapPage({
     const markersRef = useRef({}); // Dictionary: truckId -> L.marker
     const yardPolygonRef = useRef(null); // Yard boundary polygon layer
     const zoneLayersRef = useRef(null); // Zone polygons layer group
+    const congestionLayerRef = useRef(null); // Congestion circles layer group
     // NOTE: truckZoneMapRef removed - zone detection moved to server-side
 
     const [truckLocations, setTruckLocations] = useState({});
     const [selectedTruckId, setSelectedTruckId] = useState(null);
     const [mapLoaded, setMapLoaded] = useState(false);
     const [mapError, setMapError] = useState(null);
-    const [sidebarTab, setSidebarTab] = useState('trucks'); // 'trucks' | 'yard' | 'zones' | 'alerts' | 'logs'
+    const [sidebarTab, setSidebarTab] = useState('trucks'); // 'trucks' | 'yard' | 'zones' | 'alerts' | 'delay' | 'logs'
     const [yardConfig, setYardConfig] = useState(() => getYardConfig());
     const [zoneAlerts, setZoneAlerts] = useState([]); // Kept for TransitionLogsPanel compatibility
     const [dbZones, setDbZones] = useState([]); // Zones from database
@@ -121,7 +123,7 @@ function MapPage({
         }
 
         // Clear max bounds and reset minZoom if no config
-        if (!config || !config.coordinates) {
+        if (!config || !Array.isArray(config.coordinates)) {
             map.setMaxBounds(null);
             map.options.minZoom = 1;
             map.setView(
@@ -132,8 +134,18 @@ function MapPage({
             return;
         }
 
+        const polygonCoordinates = config.coordinates
+            .map((coord) => [Number(coord?.[0]), Number(coord?.[1])])
+            .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+
+        if (polygonCoordinates.length < 3) {
+            map.setMaxBounds(null);
+            map.options.minZoom = 1;
+            return;
+        }
+
         // Create polygon from coordinates
-        const polygon = L.polygon(config.coordinates, {
+        const polygon = L.polygon(polygonCoordinates, {
             color: '#22c55e',
             fillColor: '#22c55e',
             fillOpacity: 0.1,
@@ -211,19 +223,37 @@ function MapPage({
 
         try {
             // Create Leaflet map
-            const map = L.map(mapRef.current).setView(
+            const map = L.map(mapRef.current, {
+                zoomControl: true,
+            }).setView(
                 [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng],
                 DEFAULT_MAP_ZOOM
             );
 
-            // Add OpenStreetMap tile layer with dark theme
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-                subdomains: 'abcd',
+            // Add OpenStreetMap tile layer after map initialization.
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap',
                 maxZoom: 19
             }).addTo(map);
 
             mapInstanceRef.current = map;
+
+            // Leaflet can initialize before layout settles in flex containers.
+            setTimeout(() => {
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.invalidateSize();
+                }
+            }, 300);
+
+            const onWindowResize = () => {
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.invalidateSize();
+                }
+            };
+            window.addEventListener('resize', onWindowResize);
+
+            // Dedicated layer for congestion zones to avoid touching marker logic.
+            congestionLayerRef.current = L.layerGroup().addTo(map);
 
             // Draw zone polygons (initially empty, will be populated after API fetch)
             drawZonePolygons(map, []);
@@ -235,6 +265,14 @@ function MapPage({
             }
 
             setMapLoaded(true);
+
+            return () => {
+                window.removeEventListener('resize', onWindowResize);
+                if (mapInstanceRef.current) {
+                    mapInstanceRef.current.remove();
+                    mapInstanceRef.current = null;
+                }
+            };
         } catch (error) {
             console.error('Failed to initialize map:', error);
             setMapError('Failed to initialize map.');
@@ -264,6 +302,50 @@ function MapPage({
             // Update markers on map
             if (mapInstanceRef.current) {
                 updateMarkers(latestLocations);
+            }
+        }
+    }, []);
+
+    // Fetch congestion zones and render circles.
+    const fetchAndRenderCongestion = useCallback(async () => {
+        try {
+            const res = await api.getCongestionZones();
+            const map = mapInstanceRef.current;
+            const layer = congestionLayerRef.current;
+
+            if (!map || !layer) return;
+
+            layer.clearLayers();
+
+            const zones = Array.isArray(res?.zones)
+                ? res.zones
+                : Array.isArray(res?.data?.zones)
+                    ? res.data.zones
+                    : [];
+
+            zones.forEach((zone) => {
+                const lat = Number(zone.latitude);
+                const lng = Number(zone.longitude);
+
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+                const circle = L.circle([lat, lng], {
+                    radius: 50,
+                    color: 'red',
+                    fillColor: 'red',
+                    fillOpacity: 0.35,
+                    weight: 2,
+                });
+
+                circle.bindPopup(
+                    `HIGH CONGESTION<br/>Trucks: ${zone.truckCount ?? 0}<br/>Avg Speed: ${zone.avgSpeed ?? 0} km/h`
+                );
+                circle.addTo(layer);
+            });
+        } catch {
+            // Do not break map rendering if congestion API fails.
+            if (congestionLayerRef.current) {
+                congestionLayerRef.current.clearLayers();
             }
         }
     }, []);
@@ -417,6 +499,16 @@ function MapPage({
         return () => clearInterval(interval);
     }, [mapLoaded, fetchAndUpdateLocations]);
 
+    // Poll congestion zones every 15 seconds.
+    useEffect(() => {
+        if (!mapLoaded) return;
+
+        fetchAndRenderCongestion();
+        const interval = setInterval(fetchAndRenderCongestion, 15000);
+
+        return () => clearInterval(interval);
+    }, [mapLoaded, fetchAndRenderCongestion]);
+
     // Cleanup markers on unmount (map cleanup handled in initialization effect)
     useEffect(() => {
         return () => {
@@ -426,6 +518,7 @@ function MapPage({
                 });
             }
             markersRef.current = {};
+            congestionLayerRef.current = null;
         };
     }, []);
 
@@ -458,6 +551,12 @@ function MapPage({
                         onClick={() => setSidebarTab('alerts')}
                     >
                         🚨 Alerts
+                    </button>
+                    <button
+                        className={`sidebar-tab ${sidebarTab === 'delay' ? 'active' : ''}`}
+                        onClick={() => setSidebarTab('delay')}
+                    >
+                        ⏱ Delay
                     </button>
                     <button
                         className={`sidebar-tab ${sidebarTab === 'logs' ? 'active' : ''}`}
@@ -501,6 +600,9 @@ function MapPage({
                             refreshInterval={30000}
                         />
                     )}
+                    {sidebarTab === 'delay' && (
+                        <DelayPredictionPanel />
+                    )}
                     {sidebarTab === 'logs' && (
                         <TransitionLogsPanel
                             localAlerts={zoneAlerts}
@@ -518,7 +620,7 @@ function MapPage({
                         <div className="map-error-text">{mapError}</div>
                     </div>
                 ) : (
-                    <div ref={mapRef} className="map-canvas" />
+                    <div id="map" ref={mapRef} className="map-canvas" />
                 )}
             </div>
         </div>

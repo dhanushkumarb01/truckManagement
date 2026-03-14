@@ -19,6 +19,11 @@ function formatTime(ts) {
     });
 }
 
+function isDisplayableTruckId(truckId) {
+    const id = String(truckId || '').toUpperCase();
+    return !id.startsWith('ANOMALY_') && !id.startsWith('RISKY_');
+}
+
 /**
  * TruckListPanel - Shows list of trucks with their latest GPS locations
  * @param {Object} props
@@ -61,7 +66,9 @@ function TruckListPanel({ truckLocations, sessions, selectedTruckId, onSelectTru
         });
     }, [truckLocations, sessions]);
 
-    const trucksWithLocation = trucks.filter(t => t.hasLocation);
+    const trucksWithLocation = trucks.filter(
+        (t) => t.hasLocation && isDisplayableTruckId(t.truckId)
+    );
 
     return (
         <div className="card truck-list-panel">

@@ -232,6 +232,7 @@ export const getDashboardAlerts = asyncHandler(async (req, res) => {
     // Alert event types from EventLog (includes tamper events)
     const alertEventTypes = [
         'OUT_OF_YARD', 'ZONE_ANOMALY', 'SPEED_VIOLATION', 'GEOFENCE_VIOLATION',
+        'SPEED_ANOMALY', 'LONG_STOP', 'SPEED_DEVIATION', 'MOVEMENT_ANOMALY',
         // Tamper events
         'DEVICE_REMOVED', 'BLE_DISCONNECTED', 'MAGNETIC_DEVICE_REMOVED', 'DEVICE_OFFLINE'
     ];

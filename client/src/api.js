@@ -414,6 +414,38 @@ export function getYardConfigFromServer() {
 }
 
 /**
+ * GET /api/yard/stress
+ * Get current Yard Stress Index and related operational metrics.
+ */
+export function getYardStress() {
+    return request('/yard/stress');
+}
+
+/**
+ * GET /api/yard/congestion
+ * Get high congestion zones computed from recent GPS movement.
+ */
+export function getCongestionZones() {
+    return request('/yard/congestion');
+}
+
+/**
+ * GET /api/yard/driver-behaviour
+ * Get driver behaviour classification for all active trucks.
+ */
+export function getDriverBehaviour() {
+    return request('/yard/driver-behaviour');
+}
+
+/**
+ * GET /api/yard/delay-predictions
+ * Get operational delay risk predictions for active trucks.
+ */
+export function getDelayPredictions() {
+    return request('/yard/delay-predictions');
+}
+
+/**
  * PUT /api/yard-config
  * Update yard configuration including polygon boundary.
  */

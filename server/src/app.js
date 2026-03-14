@@ -17,6 +17,14 @@ import zoneRoutes from './routes/zoneRoutes.js';
 import alertsRoutes from './routes/alertsRoutes.js';
 import rfidRoutes from './routes/rfidRoutes.js';
 import yardConfigRoutes from './routes/yardConfigRoutes.js';
+import yardStressRoutes from './routes/yardStressRoutes.js';
+import congestionRoutes from './routes/congestionRoutes.js';
+import driverBehaviourRoutes from './routes/driverBehaviourRoutes.js';
+import delayPredictionRoutes from './routes/delayPredictionRoutes.js';
+import {
+    startAnomalyDetectionEngine,
+    stopAnomalyDetectionEngine,
+} from './services/anomalyDetectionService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -78,6 +86,10 @@ app.use('/api/zones', zoneRoutes);
 app.use('/api/alerts', alertsRoutes);
 app.use('/api/rfid', rfidRoutes);
 app.use('/api/yard-config', yardConfigRoutes);
+app.use('/api/yard', yardStressRoutes);
+app.use('/api/yard', congestionRoutes);
+app.use('/api/yard', driverBehaviourRoutes);
+app.use('/api/yard', delayPredictionRoutes);
 
 // --- Health check ---
 app.get('/api/health', (_req, res) => {
@@ -104,9 +116,17 @@ mongoose
         console.log('✓ Connected to MongoDB Atlas');
         app.listen(PORT, () => {
             console.log(`✓ Server running on http://localhost:${PORT}`);
+            startAnomalyDetectionEngine();
         });
     })
     .catch((err) => {
         console.error('✗ MongoDB connection failed:', err.message);
         process.exit(1);
     });
+
+const shutdown = () => {
+    stopAnomalyDetectionEngine();
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

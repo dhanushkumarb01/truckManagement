@@ -54,12 +54,19 @@ function formatAlertType(type) {
 
 // Format time ago
 function timeAgo(timestamp) {
-    const seconds = Math.floor((Date.now() - new Date(timestamp)) / 1000);
-    
-    if (seconds < 60) return `${seconds}s ago`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    return new Date(timestamp).toLocaleDateString();
+    const alertTime = new Date(timestamp).getTime();
+    if (!Number.isFinite(alertTime)) {
+        return '0s ago';
+    }
+
+    const now = Date.now();
+    const diffSeconds = Math.floor((now - alertTime) / 1000);
+    const safeSeconds = Math.max(diffSeconds, 0);
+
+    if (safeSeconds < 60) return `${safeSeconds}s ago`;
+    if (safeSeconds < 3600) return `${Math.floor(safeSeconds / 60)}m ago`;
+    if (safeSeconds < 86400) return `${Math.floor(safeSeconds / 3600)}h ago`;
+    return new Date(alertTime).toLocaleDateString();
 }
 
 function AlertsPanel({ autoRefresh = true, refreshInterval = 30000 }) {

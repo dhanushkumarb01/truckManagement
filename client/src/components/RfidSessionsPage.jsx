@@ -13,6 +13,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../api';
+import driverApkQR from '../assets/driver_apk_qr.png';
 import './RfidSessionsPage.css';
 
 // QR expiration time in minutes
@@ -376,17 +377,23 @@ function RfidSessionsPage() {
                                         📲 Scan to download Driver APK
                                     </div>
                                     <div style={{
-                                        width: '120px',
-                                        height: '120px',
-                                        background: '#fff',
-                                        borderRadius: '8px',
                                         display: 'flex',
-                                        alignItems: 'center',
                                         justifyContent: 'center',
-                                        margin: '0 auto',
-                                        border: '1px solid #e5e7eb',
+                                        alignItems: 'center',
+                                        margin: '20px 0'
                                     }}>
-                                        <span style={{ fontSize: '36px' }}>📲</span>
+                                        <img
+                                            src={driverApkQR}
+                                            alt="Driver APK QR Code"
+                                            style={{
+                                                width: '180px',
+                                                height: '180px',
+                                                background: '#fff',
+                                                padding: '10px',
+                                                borderRadius: '8px',
+                                                objectFit: 'contain',
+                                            }}
+                                        />
                                     </div>
                                     <div className="qr-sub" style={{ marginTop: '8px', color: '#666', fontSize: '11px' }}>
                                         Static QR — Same for all drivers

@@ -166,6 +166,7 @@ export const ROUTE_PERMISSIONS = {
     lifecycle: ['superadmin', 'admin'],
     fleet: ['superadmin', 'admin'],
     rfid: ['superadmin', 'admin', 'gatekeeper'], // All roles can access RFID Sessions
+    whatif: ['superadmin', 'admin'],
 };
 
 /**

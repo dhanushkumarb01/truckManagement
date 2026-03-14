@@ -9,6 +9,9 @@ import TruckLifecyclePanel from './components/TruckLifecyclePanel';
 import RfidSessionsPage from './components/RfidSessionsPage';
 import YardSelectionPage from './components/YardSelectionPage';
 import LoginPage from './components/LoginPage';
+import YardStressPanel from './components/YardStressPanel';
+import DriverBehaviourPanel from './components/DriverBehaviourPanel';
+import WhatIfSimulationPage from './pages/WhatIfSimulationPage';
 
 function App() {
     const { isAuthenticated, user, loading, logout, isGatekeeper } = useAuth();
@@ -134,6 +137,14 @@ function App() {
                             RFID Sessions
                         </button>
                     )}
+                    {canAccessView(user?.role, 'whatif') && (
+                        <button
+                            className={`nav-btn ${view === 'whatif' ? 'nav-btn-active' : ''}`}
+                            onClick={() => handleViewChange('whatif')}
+                        >
+                            What-If Simulation
+                        </button>
+                    )}
                 </nav>
                 {/* RBAC: User info and logout */}
                 <div className="header-user">
@@ -158,10 +169,28 @@ function App() {
             )}
 
             {view === 'map' && canAccessView(user?.role, 'map') && (
-                <MapPage
-                    allSessions={allSessions}
-                    onSelectTruck={handleSelectTruck}
-                />
+                <div style={{ position: 'relative', flex: 1, height: '100%', minHeight: 0, overflow: 'hidden' }}>
+                    <MapPage
+                        allSessions={allSessions}
+                        onSelectTruck={handleSelectTruck}
+                    />
+
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: 20,
+                            right: 20,
+                            zIndex: 1000,
+                            pointerEvents: 'none',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 12,
+                        }}
+                    >
+                        <YardStressPanel />
+                        <DriverBehaviourPanel />
+                    </div>
+                </div>
             )}
 
             {view === 'lifecycle' && canAccessView(user?.role, 'lifecycle') && (
@@ -176,6 +205,10 @@ function App() {
 
             {view === 'rfid' && canAccessView(user?.role, 'rfid') && (
                 <RfidSessionsPage />
+            )}
+
+            {view === 'whatif' && canAccessView(user?.role, 'whatif') && (
+                <WhatIfSimulationPage sessions={allSessions} />
             )}
 
             {/* Violation Modal */}
